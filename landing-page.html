@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3718 Dellvale Pl - Premium Rental Property | Gibson House Properties</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #fafafa;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .hero-section {
+            background: white;
+            margin: 2rem 0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .property-gallery {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-rows: 300px 300px;
+            gap: 2px;
+            height: 602px;
+        }
+        
+        .gallery-item {
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .gallery-item:first-child {
+            grid-row: 1 / 3;
+        }
+        
+        .gallery-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            color: white;
+            padding: 1.5rem;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .gallery-item:hover .gallery-overlay {
+            transform: translateY(0);
+        }
+        
+        .property-info {
+            padding: 2rem;
+        }
+        
+        .price-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        
+        .price-main {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .price-details {
+            text-align: right;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-left: 4px solid #3498db;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+            display: block;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        
+        .section {
+            background: white;
+            margin: 2rem 0;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .section h2 {
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 0.5rem;
+        }
+        
+        .comps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .comp-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: transform 0.2s ease;
+        }
+        
+        .comp-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .comp-price {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #27ae60;
+            margin-bottom: 0.5rem;
+        }
+        
+        .comp-details {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .comp-address {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .rent-ready-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .rent-ready-list li {
+            padding: 0.8rem 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        
+        .rent-ready-list li:before {
+            content: "→";
+            color: #e74c3c;
+            font-weight: bold;
+            margin-right: 1rem;
+            font-size: 1.2rem;
+        }
+        
+        .cta-section {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            text-align: center;
+            padding: 3rem 2rem;
+            border-radius: 12px;
+            margin: 2rem 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin: 1rem 0.5rem;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .cta-button:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: #7f8c8d;
+            background: #2c3e50;
+            color: white;
+        }
+        
+        .highlight {
+            background: linear-gradient(120deg, #a8e6cf 0%, #88d8c0 100%);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #27ae60;
+        }
+        
+        @media (max-width: 768px) {
+            .property-gallery {
+                grid-template-columns: 1fr;
+                grid-template-rows: repeat(6, 200px);
+                height: auto;
+            }
+            
+            .gallery-item:first-child {
+                grid-row: 1;
+            }
+            
+            .price-section {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .price-details {
+                text-align: center;
+                margin-top: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1>3718 Dellvale Place</h1>
+            <p>Premium Encino Estate • Managed by Gibson House Properties</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <section class="hero-section">
+            <div class="property-gallery">
+                <div class="gallery-item" style="background-image: url('/media/a976f3bf-65b9-48f0-b16c-9d4117515b8d.jpg')">
+                    <div class="gallery-overlay">
+                        <h3>Elegant Interior</h3>
+                        <p>Beautiful natural light throughout</p>
+                    </div>
+                </div>
+                <div class="gallery-item" style="background-image: url('/media/b1ae4393-4bca-429a-8f6a-712eb1c652d7.jpg')">
+                    <div class="gallery-overlay">
+                        <h3>Stunning Curb Appeal</h3>
+                        <p>Professionally landscaped</p>
+                    </div>
+                </div>
+                <div class="gallery-item" style="background-image: url('/media/de31ae3e-0c5a-4d47-b9de-1105b0018182.jpg')">
+                    <div class="gallery-overlay">
+                        <h3>Grand Entry</h3>
+                        <p>Impressive arched doorway</p>
+                    </div>
+                </div>
+                <div class="gallery-item" style="background-image: url('/media/de956798-03c0-40e7-a415-71b20f0a28f7.jpg')">
+                    <div class="gallery-overlay">
+                        <h3>Prime Location</h3>
+                        <p>Encino hills backdrop</p>
+                    </div>
+                </div>
+                <div class="gallery-item" style="background-image: url('/media/c0338b92-175f-4803-a136-7044c92eb77a.jpg')">
+                    <div class="gallery-overlay">
+                        <h3>Quality Construction</h3>
+                        <p>Well-maintained exterior</p>
+                    </div>
+                </div>
+                <div class="gallery-item" style="background-image: url('/media/5ae688df-b704-4510-a7fa-bf5dd2ccb2e5.jpg')">
+                    <div class="gallery-overlay">
+                        <h3>Private Backyard</h3>
+                        <p>Pool & entertaining area</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="property-info">
+                <div class="price-section">
+                    <div>
+                        <span class="price-main">$9,700</span>
+                        <span style="font-size: 1.2rem;">/month</span>
+                    </div>
+                    <div class="price-details">
+                        <div style="font-size: 1.1rem;">Estimated Value: $2,630,643</div>
+                        <div style="font-size: 0.9rem; opacity: 0.8;">Based on comparable analysis</div>
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-number">6</span>
+                        <div class="stat-label">Bedrooms</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">6</span>
+                        <div class="stat-label">Bathrooms</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">3,789</span>
+                        <div class="stat-label">Square Feet</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">0.3</span>
+                        <div class="stat-label">Acres</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">1967</span>
+                        <div class="stat-label">Year Built</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">91436</span>
+                        <div class="stat-label">Encino Zip</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Rental Market Analysis</h2>
+            <div class="highlight">
+                <strong>Market Position:</strong> This property commands premium rent in Encino's balanced market. 
+                Recent area median: $1.5M sales, 96.6% sale-to-list ratio, 80 days average market time.
+            </div>
+            
+            <div class="comps-grid">
+                <div class="comp-card">
+                    <div class="comp-price">$3,150,000</div>
+                    <div class="comp-details">5 bed • 5.5 bath • 3,551 sq ft</div>
+                    <div class="comp-address">16430 Dorado Dr, Encino</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">SOLD December 2025</div>
+                </div>
+                <div class="comp-card">
+                    <div class="comp-price">$2,125,000</div>
+                    <div class="comp-details">6 bed • 5.5 bath • 3,685 sq ft</div>
+                    <div class="comp-address">16445 Garvin Dr, Encino</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">SOLD December 2025</div>
+                </div>
+                <div class="comp-card">
+                    <div class="comp-price">$2,935,000</div>
+                    <div class="comp-details">5 bed • 5.5 bath • 4,006 sq ft</div>
+                    <div class="comp-address">3615 Terrace View Dr, Encino</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">SOLD May 2025</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Rent-Ready Optimization Plan</h2>
+            <p style="margin-bottom: 1.5rem; color: #666;">
+                Based on professional property assessment, here are the recommended improvements to maximize rental income:
+            </p>
+            
+            <ul class="rent-ready-list">
+                <li><strong>Deep Professional Cleaning</strong> - Full interior/exterior detail ($800-1,200)</li>
+                <li><strong>Fresh Interior Paint</strong> - Neutral colors throughout ($2,500-4,000)</li>
+                <li><strong>Landscape Refresh</strong> - Seasonal plantings and maintenance ($1,000-1,500)</li>
+                <li><strong>Pool Service Setup</strong> - Weekly maintenance contract ($150/month)</li>
+                <li><strong>HVAC Inspection & Service</strong> - Ensure optimal performance ($300-500)</li>
+                <li><strong>Minor Repairs</strong> - Address any maintenance items ($500-1,000)</li>
+                <li><strong>Professional Photography</strong> - High-quality listing images ($400-600)</li>
+                <li><strong>Security System Check</strong> - Verify all systems functional ($200-400)</li>
+            </ul>
+            
+            <div class="highlight">
+                <strong>Total Investment:</strong> $5,650 - $9,200 estimated to achieve premium rent positioning.
+                <br><strong>Expected ROI:</strong> 18-24 months payback through higher rental income.
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Property Management Services</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+                <div>
+                    <h3 style="color: #3498db; margin-bottom: 1rem;">Tenant Screening</h3>
+                    <ul style="color: #666;">
+                        <li>Credit & background checks</li>
+                        <li>Income verification</li>
+                        <li>Reference validation</li>
+                        <li>Rental history review</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 style="color: #3498db; margin-bottom: 1rem;">Maintenance & Repairs</h3>
+                    <ul style="color: #666;">
+                        <li>24/7 emergency service</li>
+                        <li>Preventive maintenance</li>
+                        <li>Vendor coordination</li>
+                        <li>Quality inspections</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 style="color: #3498db; margin-bottom: 1rem;">Financial Management</h3>
+                    <ul style="color: #666;">
+                        <li>Rent collection</li>
+                        <li>Monthly reporting</li>
+                        <li>Tax documentation</li>
+                        <li>Expense tracking</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta-section">
+            <h2 style="margin-bottom: 1rem; border: none; padding: 0;">Ready to Maximize Your Investment?</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 2rem; opacity: 0.9;">
+                Let's discuss your property management goals and create a custom strategy for 3718 Dellvale Place.
+            </p>
+            <a href="sms:+14158436766&body=Hi Marco, I'm interested in discussing property management for 3718 Dellvale Pl. When can we talk?" class="cta-button">
+                Text Marco Now
+            </a>
+            <a href="tel:+14158436766" class="cta-button">
+                Call Directly
+            </a>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Gibson House Properties | Licensed Real Estate Professional</p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem;">
+                Professional Property Management • Encino, CA • CA DRE License Available Upon Request
+            </p>
+        </div>
+    </footer>
+</body>
+</html>

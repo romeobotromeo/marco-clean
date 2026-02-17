@@ -2,6 +2,8 @@ const express = require('express');
 const twilio = require('twilio');
 const Anthropic = require('@anthropic-ai/sdk');
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -16,6 +18,18 @@ const anthropic = new Anthropic({
 });
 
 app.get('/', (req, res) => res.send('Marco is alive'));
+
+// Serve landing page for 3718 Dellvale Pl
+app.get('/dellvale', (req, res) => {
+  try {
+    const landingPagePath = path.join(__dirname, 'landing-page.html');
+    const landingPageContent = fs.readFileSync(landingPagePath, 'utf8');
+    res.type('text/html').send(landingPageContent);
+  } catch (err) {
+    console.error('Error serving landing page:', err);
+    res.status(500).send('Landing page temporarily unavailable');
+  }
+});
 
 app.post('/sms', async (req, res) => {
   const from = req.body.From || '';
