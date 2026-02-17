@@ -8,6 +8,7 @@ const path = require('path');
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(express.static(__dirname)); // Serve static files from current directory
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL
