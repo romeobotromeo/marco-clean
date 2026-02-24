@@ -18,6 +18,121 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
+// PHASE 1: Database Enhancement Function
+async function ensureDatabaseSchema() {
+  try {
+    // Add conversation system fields to customers table
+    await pool.query(`
+      ALTER TABLE customers 
+      ADD COLUMN IF NOT EXISTS business_name VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS services TEXT[],
+      ADD COLUMN IF NOT EXISTS conversation_state VARCHAR(50) DEFAULT 'greeting',
+      ADD COLUMN IF NOT EXISTS style_preference TEXT,
+      ADD COLUMN IF NOT EXISTS business_phone VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS site_url VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+    `);
+    
+    console.log('✅ Database schema enhanced for Phase 1');
+  } catch (error) {
+    console.log('ℹ️  Database schema already enhanced or error:', error.message);
+  }
+}
+
+// PHASE 1: Conversation System Functions
+function buildSystemPromptForState(state, customer) {
+  const basePersonality = "You are Marco, a grumpy but talented web designer who builds websites via text. Keep responses short (under 160 chars when possible). Be helpful but with attitude.";
+  
+  switch(state) {
+    case 'greeting':
+      return `${basePersonality} This is a new customer. Welcome them and ask what kind of business they have.`;
+    
+    case 'collecting_name':
+      return `${basePersonality} They mentioned their business type. Now ask for their business name specifically. Don't repeat what they already told you.`;
+    
+    case 'collecting_services':
+      return `${basePersonality} Business name: "${customer.business_name}". Ask what specific services they offer. Be natural about it.`;
+    
+    case 'collecting_style':
+      return `${basePersonality} Business: "${customer.business_name}", Services: "${customer.services?.join(', ')}". Ask about their style preference or show them examples.`;
+    
+    default:
+      return basePersonality;
+  }
+}
+
+function extractDataFromMessage(userMessage, currentState) {
+  const extracted = {};
+  const message = userMessage.toLowerCase();
+  
+  switch(currentState) {
+    case 'collecting_name':
+      // Simple extraction - look for business-like patterns
+      const businessPatterns = [
+        /(?:my business is |business is |it's |called |named? |name's )([^.!?]*)/i,
+        /([a-zA-Z0-9\s&'-]+(?:llc|inc|corp|company|co\.|plumbing|landscaping|cleaning|handyman|electric|construction|roofing))/i
+      ];
+      
+      for (const pattern of businessPatterns) {
+        const match = userMessage.match(pattern);
+        if (match && match[1] && match[1].trim().length > 2) {
+          extracted.business_name = match[1].trim();
+          break;
+        }
+      }
+      break;
+      
+    case 'collecting_services':
+      // Extract services - simple keyword matching
+      const services = [];
+      const serviceKeywords = {
+        'plumbing': ['plumb', 'pipe', 'leak', 'drain', 'water', 'toilet', 'faucet'],
+        'landscaping': ['landscap', 'lawn', 'garden', 'yard', 'grass', 'tree', 'plant'],
+        'cleaning': ['clean', 'janitor', 'housekeep', 'maid'],
+        'handyman': ['handyman', 'repair', 'fix', 'maintenance', 'odd job'],
+        'electrical': ['electric', 'wiring', 'outlet', 'light', 'panel']
+      };
+      
+      for (const [service, keywords] of Object.entries(serviceKeywords)) {
+        if (keywords.some(keyword => message.includes(keyword))) {
+          services.push(service);
+        }
+      }
+      
+      // Also extract literal services mentioned
+      const serviceMatches = userMessage.match(/(?:we do |offer |provide )([^.!?]*)/i);
+      if (serviceMatches) {
+        services.push(serviceMatches[1].trim());
+      }
+      
+      if (services.length > 0) {
+        extracted.services = services;
+      }
+      break;
+  }
+  
+  return extracted;
+}
+
+function determineNextState(currentState, extractedData) {
+  switch(currentState) {
+    case 'greeting':
+      return 'collecting_name';
+    
+    case 'collecting_name':
+      return extractedData.business_name ? 'collecting_services' : 'collecting_name';
+    
+    case 'collecting_services':
+      return extractedData.services ? 'collecting_style' : 'collecting_services';
+    
+    case 'collecting_style':
+      return 'ready_to_build';
+    
+    default:
+      return currentState;
+  }
+}
+
 app.get('/', (req, res) => res.send('Marco is alive'));
 
 app.post('/waitlist', async (req, res) => {
@@ -62,21 +177,95 @@ app.post('/sms', async (req, res) => {
   const from = req.body.From || '';
   const body = req.body.Body || '';
   console.log(`SMS from ${from}: ${body}`);
+  
   try {
-    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body]);
+    // PHASE 1: Get or create customer with conversation state
+    let customerResult = await pool.query(
+      'SELECT * FROM customers WHERE phone = $1', 
+      [from]
+    );
+    
+    let customer;
+    if (customerResult.rows.length === 0) {
+      // Create new customer with default conversation state
+      const insertResult = await pool.query(
+        'INSERT INTO customers (phone, status, conversation_state, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *',
+        [from, 'new', 'greeting']
+      );
+      customer = insertResult.rows[0];
+      console.log(`🆕 New customer created: ${from}`);
+    } else {
+      customer = customerResult.rows[0];
+      console.log(`📞 Existing customer: ${from}, state: ${customer.conversation_state}`);
+    }
+    
+    // PHASE 1: Log inbound message
+    await pool.query(
+      'INSERT INTO messages (phone, direction, body, created_at) VALUES ($1, $2, $3, NOW())', 
+      [from, 'inbound', body]
+    );
+    
+    // PHASE 1: Extract data from user message
+    const extractedData = extractDataFromMessage(body, customer.conversation_state);
+    console.log(`🔍 Extracted data:`, extractedData);
+    
+    // PHASE 1: Build context-aware system prompt
+    const systemPrompt = buildSystemPromptForState(customer.conversation_state, customer);
+    console.log(`🤖 State: ${customer.conversation_state}, Prompt ready`);
+    
+    // PHASE 1: Enhanced Claude call with conversation context
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 300,
-      system: `You are Marco, a grumpy but talented web designer who builds websites via text. Keep responses short (under 160 chars when possible). Be helpful but with attitude.`,
+      system: systemPrompt,
       messages: [{ role: 'user', content: body }]
     });
+    
     const marcoReply = response.content[0].text;
-    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'outbound', marcoReply]);
+    console.log(`💬 Marco reply: ${marcoReply}`);
+    
+    // PHASE 1: Update customer with extracted data and new state
+    const updateFields = [];
+    const updateValues = [];
+    let valueIndex = 1;
+    
+    if (extractedData.business_name) {
+      updateFields.push(`business_name = $${valueIndex++}`);
+      updateValues.push(extractedData.business_name);
+    }
+    
+    if (extractedData.services) {
+      updateFields.push(`services = $${valueIndex++}`);
+      updateValues.push(extractedData.services);
+    }
+    
+    // Determine next conversation state
+    const nextState = determineNextState(customer.conversation_state, extractedData);
+    updateFields.push(`conversation_state = $${valueIndex++}`);
+    updateValues.push(nextState);
+    
+    updateFields.push(`updated_at = NOW()`);
+    
+    if (updateFields.length > 1) { // More than just updated_at
+      updateValues.push(customer.id);
+      const updateQuery = `UPDATE customers SET ${updateFields.join(', ')} WHERE id = $${valueIndex}`;
+      await pool.query(updateQuery, updateValues);
+      console.log(`📊 Customer updated: ${customer.conversation_state} → ${nextState}`);
+    }
+    
+    // PHASE 1: Log outbound message  
+    await pool.query(
+      'INSERT INTO messages (phone, direction, body, created_at) VALUES ($1, $2, $3, NOW())', 
+      [from, 'outbound', marcoReply]
+    );
+    
+    // Send SMS response
     const twiml = new twilio.twiml.MessagingResponse();
     twiml.message(marcoReply);
     res.type('text/xml').send(twiml.toString());
+    
   } catch (err) {
-    console.error('Error:', err);
+    console.error('❌ SMS Error:', err);
     const twiml = new twilio.twiml.MessagingResponse();
     twiml.message("Marco here. Give me a sec, something's weird on my end.");
     res.type('text/xml').send(twiml.toString());
@@ -84,4 +273,26 @@ app.post('/sms', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Marco running on port ${PORT}`));
+
+// PHASE 1: Initialize database schema and start server
+async function startServer() {
+  try {
+    console.log('🔧 Initializing MARCO CLEAN Phase 1...');
+    
+    // Ensure database schema is ready
+    await ensureDatabaseSchema();
+    
+    // Start the server
+    app.listen(PORT, () => {
+      console.log(`🚀 Marco CLEAN v1.1 running on port ${PORT}`);
+      console.log('✨ Phase 1: Sophisticated conversation system ACTIVE');
+      console.log('📊 Features: State tracking, data extraction, smart prompts');
+    });
+    
+  } catch (error) {
+    console.error('❌ Server startup failed:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
