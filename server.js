@@ -18,6 +18,13 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
+// PHASE 2: Template Engine Integration
+const TemplateEngine = require('./templates/template-engine');
+const templateEngine = new TemplateEngine();
+
+// Twilio client for sending messages
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
 // PHASE 1: Database Enhancement Function
 async function ensureDatabaseSchema() {
   try {
@@ -45,16 +52,22 @@ function buildSystemPromptForState(state, customer) {
   
   switch(state) {
     case 'greeting':
-      return `${basePersonality} This is a new customer. Welcome them and ask what kind of business they have.`;
+      return `${basePersonality} This is a new customer. Welcome them warmly and ask what kind of business they have. Be excited to help them get a website!`;
     
     case 'collecting_name':
       return `${basePersonality} They mentioned their business type. Now ask for their business name specifically. Don't repeat what they already told you.`;
     
     case 'collecting_services':
-      return `${basePersonality} Business name: "${customer.business_name}". Ask what specific services they offer. Be natural about it.`;
+      return `${basePersonality} Business name: "${customer.business_name}". Ask what specific services they offer. Be natural about it - you need this info to build their website.`;
     
     case 'collecting_style':
-      return `${basePersonality} Business: "${customer.business_name}", Services: "${customer.services?.join(', ')}". Ask about their style preference or show them examples.`;
+      return `${basePersonality} Business: "${customer.business_name}", Services: "${customer.services?.join(', ')}". Ask if they want a simple, professional website or have any style preferences. You're almost ready to build their site!`;
+      
+    case 'ready_to_build':
+      return `${basePersonality} You have everything you need. Tell them you're building their website now! Business: "${customer.business_name}", Services: "${customer.services?.join(', ')}"`;
+    
+    case 'site_building':
+      return `${basePersonality} You're currently building their website. If they ask about progress, tell them it'll be ready in just a few minutes.`;
     
     default:
       return basePersonality;
@@ -128,12 +141,113 @@ function determineNextState(currentState, extractedData) {
     case 'collecting_style':
       return 'ready_to_build';
     
+    case 'ready_to_build':
+      return 'site_building';
+    
     default:
       return currentState;
   }
 }
 
+// PHASE 2: Website Generation System
+async function generateWebsiteForCustomer(customerId) {
+  try {
+    console.log(`🏗️  Starting website generation for customer: ${customerId}`);
+    
+    // Get customer data
+    const customerResult = await pool.query('SELECT * FROM customers WHERE id = $1', [customerId]);
+    if (customerResult.rows.length === 0) {
+      throw new Error('Customer not found');
+    }
+    
+    const customer = customerResult.rows[0];
+    
+    // Validate we have enough data
+    if (!customer.business_name) {
+      throw new Error('Missing business name - cannot generate website');
+    }
+    
+    console.log(`📊 Customer data: ${customer.business_name}, Services: ${customer.services ? customer.services.join(', ') : 'none'}`);
+    
+    // Prepare template configuration
+    const templateConfig = {
+      businessName: customer.business_name,
+      services: customer.services || [],
+      businessPhone: customer.business_phone || customer.phone,
+      stylePreference: customer.style_preference
+    };
+    
+    // Generate subdomain
+    const subdomain = templateEngine.generateSubdomain(customer.business_name);
+    const siteUrl = `https://${subdomain}.textmarco.com`;
+    
+    console.log(`🌐 Generated subdomain: ${subdomain}`);
+    
+    // Generate website HTML
+    const siteHTML = templateEngine.generateSiteHTML(templateConfig);
+    console.log(`📄 Generated HTML: ${(siteHTML.length / 1024).toFixed(1)}KB`);
+    
+    // PHASE 2: For now, save to local file (Phase 3 will add real deployment)
+    const fs = require('fs');
+    const testDir = './generated-sites';
+    if (!fs.existsSync(testDir)) {
+      fs.mkdirSync(testDir);
+    }
+    
+    const filepath = `${testDir}/${subdomain}.html`;
+    fs.writeFileSync(filepath, siteHTML);
+    
+    console.log(`💾 Website saved locally: ${filepath}`);
+    
+    // Update customer record with site info
+    await pool.query(
+      'UPDATE customers SET site_url = $1, status = $2, updated_at = NOW() WHERE id = $3',
+      [siteUrl, 'launched', customerId]
+    );
+    
+    console.log(`✅ Website generation completed for: ${customer.business_name}`);
+    
+    return {
+      success: true,
+      siteUrl: siteUrl,
+      subdomain: subdomain,
+      filepath: filepath
+    };
+    
+  } catch (error) {
+    console.error(`❌ Website generation failed:`, error);
+    
+    // Update customer status to indicate failure
+    await pool.query(
+      'UPDATE customers SET status = $1, updated_at = NOW() WHERE id = $2',
+      ['build_failed', customerId]
+    );
+    
+    throw error;
+  }
+}
+
 app.get('/', (req, res) => res.send('Marco is alive'));
+
+// PHASE 2: Template Engine Test Endpoint
+app.get('/test-template', async (req, res) => {
+  try {
+    const testConfig = {
+      businessName: "Test Handyman Co",
+      services: ['repairs', 'maintenance', 'odd jobs'],
+      businessPhone: '(555) 123-4567'
+    };
+    
+    const html = templateEngine.generateSiteHTML(testConfig);
+    res.type('text/html').send(html);
+    
+  } catch (error) {
+    res.status(500).json({
+      error: 'Template generation failed',
+      message: error.message
+    });
+  }
+});
 
 app.post('/waitlist', async (req, res) => {
   const phone = req.body.phone || '';
@@ -251,6 +365,59 @@ app.post('/sms', async (req, res) => {
       const updateQuery = `UPDATE customers SET ${updateFields.join(', ')} WHERE id = $${valueIndex}`;
       await pool.query(updateQuery, updateValues);
       console.log(`📊 Customer updated: ${customer.conversation_state} → ${nextState}`);
+    }
+    
+    // PHASE 2: Trigger website generation if customer is ready
+    if (nextState === 'ready_to_build' && customer.business_name && customer.services) {
+      console.log(`🚀 Customer ready for website generation: ${customer.business_name}`);
+      
+      // Update state to building (optimistic)
+      await pool.query(
+        'UPDATE customers SET conversation_state = $1, status = $2, updated_at = NOW() WHERE id = $3',
+        ['site_building', 'building', customer.id]
+      );
+      
+      // Trigger website generation asynchronously
+      setImmediate(async () => {
+        try {
+          const result = await generateWebsiteForCustomer(customer.id);
+          console.log(`✅ Website built successfully: ${result.siteUrl}`);
+          
+          // Send success message to customer
+          const twiml = new twilio.twiml.MessagingResponse();
+          const successMessage = `🎉 Done! Your website is ready at: ${result.siteUrl} - check it out and let me know what you think!`;
+          
+          await twilioClient.messages.create({
+            from: process.env.TWILIO_PHONE_NUMBER || '+14158436766',
+            to: from,
+            body: successMessage
+          });
+          
+          // Log the success message
+          await pool.query(
+            'INSERT INTO messages (phone, direction, body, created_at) VALUES ($1, $2, $3, NOW())', 
+            [from, 'outbound', successMessage]
+          );
+          
+        } catch (buildError) {
+          console.error(`❌ Website generation failed for ${customer.business_name}:`, buildError);
+          
+          // Send failure message to customer
+          const failMessage = "Oops! Hit a snag building your site. Give me a few minutes to fix this and I'll try again!";
+          
+          await twilioClient.messages.create({
+            from: process.env.TWILIO_PHONE_NUMBER || '+14158436766',
+            to: from,
+            body: failMessage
+          });
+          
+          // Log the fail message
+          await pool.query(
+            'INSERT INTO messages (phone, direction, body, created_at) VALUES ($1, $2, $3, NOW())', 
+            [from, 'outbound', failMessage]
+          );
+        }
+      });
     }
     
     // PHASE 1: Log outbound message  

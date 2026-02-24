@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Green Thumb Landscaping | Professional Services</title>
+    <meta name="description" content="Green Thumb Landscaping - landscaping, lawn care, garden design. Contact (555) 456-7890 today!">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        :root {
+            --bg: #0f172a;
+            --text: #ffffff;
+            --accent: #00a67e;
+            --muted: #94a3b8;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .hero-emoji {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: clamp(36px, 8vw, 64px);
+            font-weight: 800;
+            margin-bottom: 15px;
+            letter-spacing: -1px;
+        }
+        
+        .tagline {
+            font-size: clamp(18px, 4vw, 24px);
+            color: var(--muted);
+            margin-bottom: 40px;
+            max-width: 500px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: var(--accent);
+            color: #fff;
+            padding: 20px 56px;
+            font-size: 20px;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: transform 0.2s;
+            margin-bottom: 60px;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .services {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .services h2 {
+            color: var(--accent);
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        
+        .services ul {
+            list-style: none;
+            display: grid;
+            gap: 10px;
+        }
+        
+        .services li {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .services li:last-child {
+            border-bottom: none;
+        }
+        
+        .footer {
+            margin-top: 60px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <div class="hero-emoji">🌱</div>
+        <h1>Green Thumb Landscaping</h1>
+        <div class="tagline">Professional services you can trust</div>
+        
+        <a href="tel:(555) 456-7890" class="cta-button">Call (555) 456-7890</a>
+        
+        <div class="services">
+            <h2>Our Services</h2>
+            <ul>
+                <li>Landscaping</li><li>Lawn care</li><li>Garden design</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p>Built with Marco • Text to website in minutes</p>
+        </div>
+    </div>
+</body>
+</html>
