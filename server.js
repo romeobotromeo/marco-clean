@@ -4,6 +4,11 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const TemplateEngine = require('./template-engine');
+const CloudflareDeployer = require('./cloudflare-deployer');
+
+const templateEngine = new TemplateEngine();
+const deployer = new CloudflareDeployer();
 
 const app = express();
 
@@ -236,20 +241,55 @@ Example tone:
 }
 
 async function generateSite(data) {
-  const subdomain = (data.site_name || 'site')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+  const subdomain = templateEngine.generateSubdomain(data.site_name || 'site');
 
-  // TODO: Generate actual site HTML and deploy to subdomain
-  // For now, return placeholder URL
-  return `${subdomain}.textmarco.com`;
+  // Build config for template engine
+  const config = {
+    businessName: data.site_name || 'My Business',
+    businessPhone: data.contact_phone || '',
+    services: data.site_type ? [data.site_type] : [],
+    template: null // auto-detect from services
+  };
+
+  // Generate HTML
+  const html = templateEngine.generateSiteHTML(config);
+
+  // Deploy to Cloudflare Pages (or simulate if no credentials)
+  const result = await deployer.deployWebsite(subdomain, html, config.businessName);
+
+  if (result.success) {
+    console.log(`Site deployed: ${result.url}`);
+
+    // Also save locally as fallback
+    const sitesDir = path.join(__dirname, 'sites');
+    if (!fs.existsSync(sitesDir)) fs.mkdirSync(sitesDir, { recursive: true });
+    fs.writeFileSync(path.join(sitesDir, `${subdomain}.html`), html);
+
+    return result.url;
+  }
+
+  // Fallback: serve from Express
+  console.log(`Cloudflare deploy failed, serving locally: /sites/${subdomain}`);
+  const sitesDir = path.join(__dirname, 'sites');
+  if (!fs.existsSync(sitesDir)) fs.mkdirSync(sitesDir, { recursive: true });
+  fs.writeFileSync(path.join(sitesDir, `${subdomain}.html`), html);
+
+  return `https://marco-clean.onrender.com/sites/${subdomain}`;
 }
 
 // --- Routes ---
 
 app.get('/', (req, res) => res.send('Marco is alive'));
+
+// Serve locally-generated sites
+app.get('/sites/:slug', (req, res) => {
+  const filePath = path.join(__dirname, 'sites', `${req.params.slug}.html`);
+  if (fs.existsSync(filePath)) {
+    res.type('text/html').send(fs.readFileSync(filePath, 'utf8'));
+  } else {
+    res.status(404).send('Site not found');
+  }
+});
 
 app.post('/waitlist', async (req, res) => {
   const phone = req.body.phone || '';
