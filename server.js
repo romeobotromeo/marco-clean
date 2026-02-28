@@ -79,43 +79,59 @@ async function sendSMS(to, content, fromNumber) {
   });
 }
 
+// --- Smart extraction using Claude ---
+async function extractField(message, field) {
+  const prompts = {
+    site_name: `The user was asked for their business or site name. They said: "${message}". Extract ONLY the business/site name. If they're joking or chatting, look for the actual name. Return ONLY the name, nothing else. No quotes, no punctuation, no explanation.`,
+    site_type: `The user was asked what type of business they have. They said: "${message}". Extract ONLY the business type/category (like "mobile car wash", "plumbing", "landscaping"). Return ONLY the type, nothing else.`,
+    contact_phone: `The user was asked for a phone number. They said: "${message}". Extract ONLY the phone number. Return ONLY the digits (with country code if given), nothing else.`
+  };
+
+  const resp = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 50,
+    system: 'You extract specific data from conversational text. Return ONLY the requested value. No explanation, no quotes, no extra text.',
+    messages: [{ role: 'user', content: prompts[field] || `Extract the ${field} from: "${message}"` }]
+  });
+  return resp.content[0].text.trim();
+}
+
 // --- State Machine ---
 const STATES = {
   'greeting': {
-    response: "new phone who dis",
+    response: "your new website is a few texts away. business or personal?",
     nextState: "ask_type"
   },
   'ask_type': {
-    response: "business or personal?",
-    validation: (msg) => /business|personal/i.test(msg),
-    fallback: "just tell me - business or personal?",
-    nextState: (msg) => /business/i.test(msg) ? "ask_biz_name" : "ask_personal_name",
-    extraction: (msg) => ({ is_personal: /personal/i.test(msg) })
+    validation: (msg) => /business|personal|biz|company|myself|me/i.test(msg),
+    fallback: "business or personal?",
+    nextState: (msg) => /business|biz|company/i.test(msg) ? "ask_biz_name" : "ask_personal_name",
+    extraction: (msg) => ({ is_personal: /personal|myself|me/i.test(msg) })
   },
   'ask_biz_name': {
     response: "what's the business called?",
     nextState: "ask_biz_category",
-    extraction: (msg) => ({ site_name: msg.trim() })
+    smartExtract: "site_name"
   },
   'ask_biz_category': {
     response: "what type of business?",
     nextState: "ask_phone",
-    extraction: (msg) => ({ site_type: msg.trim() })
+    smartExtract: "site_type"
   },
   'ask_personal_name': {
     response: "what should we name your site?",
     nextState: "ask_personal_purpose",
-    extraction: (msg) => ({ site_name: msg.trim() })
+    smartExtract: "site_name"
   },
   'ask_personal_purpose': {
     response: "what's it for?",
     nextState: "ask_phone",
-    extraction: (msg) => ({ site_type: msg.trim() })
+    smartExtract: "site_type"
   },
   'ask_phone': {
-    response: "what's the best phone number for the site? texts and calls only - no email",
+    response: "what's the best phone number for the site?",
     nextState: "building",
-    extraction: (msg) => ({ contact_phone: msg.trim() })
+    smartExtract: "contact_phone"
   },
   'building': {
     response: "ok I think I have what I need. give me 2 min",
@@ -198,7 +214,7 @@ Example tone:
 
   const state = STATES[convo.state];
   if (!state) {
-    return { response: "new phone who dis", newState: "ask_type", extracted: null };
+    return { response: "your new website is a few texts away. business or personal?", newState: "ask_type", extracted: null };
   }
 
   // Validate if needed
@@ -206,8 +222,14 @@ Example tone:
     return { response: state.fallback || "sorry, didn't catch that", newState: convo.state, extracted: null };
   }
 
-  // Extract data
-  const extracted = state.extraction ? state.extraction(message) : null;
+  // Extract data — use Claude for smart extraction if configured
+  let extracted = null;
+  if (state.smartExtract) {
+    const value = await extractField(message, state.smartExtract);
+    extracted = { [state.smartExtract]: value };
+  } else if (state.extraction) {
+    extracted = state.extraction(message);
+  }
 
   // Determine next state
   let nextState = typeof state.nextState === 'function'
@@ -254,27 +276,24 @@ async function generateSite(data) {
   // Generate HTML
   const html = templateEngine.generateSiteHTML(config);
 
-  // Deploy to Cloudflare Pages (or simulate if no credentials)
-  const result = await deployer.deployWebsite(subdomain, html, config.businessName);
-
-  if (result.success) {
-    console.log(`Site deployed: ${result.url}`);
-
-    // Also save locally as fallback
-    const sitesDir = path.join(__dirname, 'sites');
-    if (!fs.existsSync(sitesDir)) fs.mkdirSync(sitesDir, { recursive: true });
-    fs.writeFileSync(path.join(sitesDir, `${subdomain}.html`), html);
-
-    return result.url;
-  }
-
-  // Fallback: serve from Express
-  console.log(`Cloudflare deploy failed, serving locally: /sites/${subdomain}`);
+  // Save site locally (always works)
   const sitesDir = path.join(__dirname, 'sites');
   if (!fs.existsSync(sitesDir)) fs.mkdirSync(sitesDir, { recursive: true });
   fs.writeFileSync(path.join(sitesDir, `${subdomain}.html`), html);
 
-  return `https://marco-clean.onrender.com/sites/${subdomain}`;
+  // Try Cloudflare Pages if credentials exist
+  if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
+    const result = await deployer.deployWebsite(subdomain, html, config.businessName);
+    if (result.success && result.method !== 'simulation') {
+      console.log(`Site deployed to Cloudflare: ${result.url}`);
+      return result.url;
+    }
+  }
+
+  // Serve from Express
+  const localUrl = `https://marco-clean.onrender.com/sites/${subdomain}`;
+  console.log(`Site generated: ${localUrl}`);
+  return localUrl;
 }
 
 // --- Routes ---
