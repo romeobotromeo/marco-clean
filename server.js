@@ -1,5 +1,5 @@
 const express = require('express');
-const twilio = require('twilio');
+const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
@@ -59,8 +59,9 @@ app.get('/dellvale', (req, res) => {
 });
 
 app.post('/sms', async (req, res) => {
-  const from = req.body.From || '';
-  const body = req.body.Body || '';
+  // SendBlue webhook format
+  const from = req.body.from_number || '';
+  const body = req.body.content || '';
   console.log(`SMS from ${from}: ${body}`);
   try {
     await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body]);
@@ -72,14 +73,37 @@ app.post('/sms', async (req, res) => {
     });
     const marcoReply = response.content[0].text;
     await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'outbound', marcoReply]);
-    const twiml = new twilio.twiml.MessagingResponse();
-    twiml.message(marcoReply);
-    res.type('text/xml').send(twiml.toString());
+
+    // Reply via SendBlue
+    await axios.post('https://api.sendblue.co/api/send-message', {
+      number: from,
+      content: marcoReply
+    }, {
+      headers: {
+        'sb-api-key-id': process.env.SENDBLUE_API_KEY,
+        'sb-api-secret-key': process.env.SENDBLUE_API_SECRET,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.status(200).json({ success: true });
   } catch (err) {
-    console.error('Error:', err);
-    const twiml = new twilio.twiml.MessagingResponse();
-    twiml.message("Marco here. Give me a sec, something's weird on my end.");
-    res.type('text/xml').send(twiml.toString());
+    console.error('Error:', err.response?.data || err.message || err);
+    try {
+      await axios.post('https://api.sendblue.co/api/send-message', {
+        number: from,
+        content: "Marco here. Give me a sec, something's weird on my end."
+      }, {
+        headers: {
+          'sb-api-key-id': process.env.SENDBLUE_API_KEY,
+          'sb-api-secret-key': process.env.SENDBLUE_API_SECRET,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (sendErr) {
+      console.error('Failed to send error reply:', sendErr.response?.data || sendErr.message);
+    }
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
