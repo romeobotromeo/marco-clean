@@ -62,7 +62,9 @@ app.post('/sms', async (req, res) => {
   // SendBlue webhook format
   const from = req.body.from_number || '';
   const body = req.body.content || '';
-  console.log(`SMS from ${from}: ${body}`);
+  const sendblueNumber = req.body.sendblue_number || req.body.to_number || '';
+  console.log(`SMS from ${from} to ${sendblueNumber}: ${body}`);
+  console.log('Full webhook payload:', JSON.stringify(req.body));
   try {
     await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body]);
     const response = await anthropic.messages.create({
@@ -77,7 +79,8 @@ app.post('/sms', async (req, res) => {
     // Reply via SendBlue
     await axios.post('https://api.sendblue.co/api/send-message', {
       number: from,
-      content: marcoReply
+      content: marcoReply,
+      from_number: sendblueNumber
     }, {
       headers: {
         'sb-api-key-id': process.env.SENDBLUE_API_KEY,
@@ -92,7 +95,8 @@ app.post('/sms', async (req, res) => {
     try {
       await axios.post('https://api.sendblue.co/api/send-message', {
         number: from,
-        content: "Marco here. Give me a sec, something's weird on my end."
+        content: "Marco here. Give me a sec, something's weird on my end.",
+        from_number: sendblueNumber
       }, {
         headers: {
           'sb-api-key-id': process.env.SENDBLUE_API_KEY,
