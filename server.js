@@ -232,7 +232,7 @@ Example tone:
     };
   }
 
-  return { response: state.response, newState, extracted };
+  return { response: state.response, newState: nextState, extracted };
 }
 
 async function generateSite(data) {
