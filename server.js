@@ -96,6 +96,120 @@ async function extractField(message, field) {
   return resp.content[0].text.trim();
 }
 
+// --- Site editing helpers ---
+
+async function getSiteHTML(phone) {
+  const result = await pool.query(
+    'SELECT site_html, site_subdomain, site_url FROM conversations WHERE phone = $1',
+    [phone]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+
+  // Layer 1: Database (canonical)
+  if (row.site_html) {
+    return { html: row.site_html, subdomain: row.site_subdomain, siteUrl: row.site_url };
+  }
+
+  // Layer 2: Disk via stored subdomain
+  if (row.site_subdomain) {
+    const filePath = path.join(__dirname, 'sites', `${row.site_subdomain}.html`);
+    if (fs.existsSync(filePath)) {
+      const html = fs.readFileSync(filePath, 'utf8');
+      await pool.query('UPDATE conversations SET site_html = $1 WHERE phone = $2', [html, phone]);
+      return { html, subdomain: row.site_subdomain, siteUrl: row.site_url };
+    }
+  }
+
+  // Layer 3: Derive subdomain from site_url, read from disk
+  if (row.site_url) {
+    const cfMatch = row.site_url.match(/https?:\/\/([^.]+)\.textmarco\.com/);
+    const localMatch = row.site_url.match(/\/sites\/([^/?#]+)/);
+    const subdomain = cfMatch?.[1] || localMatch?.[1] || null;
+    if (subdomain) {
+      const filePath = path.join(__dirname, 'sites', `${subdomain}.html`);
+      if (fs.existsSync(filePath)) {
+        const html = fs.readFileSync(filePath, 'utf8');
+        await pool.query(
+          'UPDATE conversations SET site_html = $1, site_subdomain = $2 WHERE phone = $3',
+          [html, subdomain, phone]
+        );
+        return { html, subdomain, siteUrl: row.site_url };
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildActiveSystemPrompt(siteData) {
+  const basePersonality = `You are Marco, a grumpy waiter at a diner who happens to be a web design genius.
+
+Rules:
+- Short responses (under 160 chars when possible) for conversation
+- No sighs, no "ugh", no "*sigh*", no asterisk actions
+- Dry, slightly annoyed competence
+- You have their back but you won't be cheerful about it
+- You want to help them nail their business`;
+
+  if (!siteData || !siteData.html) {
+    return basePersonality + `\n\nThe user has a live site but you cannot access the HTML right now. Chat with them normally but let them know you're having trouble pulling up their site if they ask for changes.`;
+  }
+
+  return basePersonality + `
+
+SITE EDITING INSTRUCTIONS:
+The user has a live website. Their current site HTML is provided below.
+When the user asks you to change something about their site, you MUST:
+1. Make the requested changes to the HTML
+2. Return the COMPLETE modified HTML wrapped in these exact markers:
+   <!-- MARCO_HTML_START -->
+   (full HTML here)
+   <!-- MARCO_HTML_END -->
+3. Also include a short conversational confirmation OUTSIDE the markers
+
+When the user is NOT asking for a site change, just respond conversationally. Do NOT include HTML markers.
+
+IMPORTANT:
+- Always return the COMPLETE HTML document, not just a snippet
+- Preserve all existing styles and structure unless asked to change them
+- Keep the "Built with Marco" footer
+- If the request is vague, make a reasonable interpretation and confirm what you did
+
+CURRENT SITE HTML:
+\`\`\`html
+${siteData.html}
+\`\`\``;
+}
+
+async function saveSiteAndRedeploy(phone, subdomain, newHtml, currentSiteUrl) {
+  // 1. Database (canonical)
+  await pool.query(
+    'UPDATE conversations SET site_html = $1, updated_at = NOW() WHERE phone = $2',
+    [newHtml, phone]
+  );
+
+  // 2. Local disk
+  const sitesDir = path.join(__dirname, 'sites');
+  if (!fs.existsSync(sitesDir)) fs.mkdirSync(sitesDir, { recursive: true });
+  fs.writeFileSync(path.join(sitesDir, `${subdomain}.html`), newHtml);
+
+  // 3. Cloudflare (if credentials exist and site was on Cloudflare)
+  if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
+    const isCloudflare = currentSiteUrl && currentSiteUrl.includes('textmarco.com');
+    if (isCloudflare) {
+      try {
+        const result = await deployer.deployWebsite(subdomain, newHtml, subdomain);
+        if (!result.success) {
+          console.error(`Cloudflare redeploy failed for ${subdomain}:`, result.error);
+        }
+      } catch (err) {
+        console.error(`Cloudflare redeploy error for ${subdomain}:`, err.message);
+      }
+    }
+  }
+}
+
 // --- State Machine ---
 const STATES = {
   'greeting': {
@@ -187,29 +301,73 @@ async function updateConversation(phone, newState, extracted) {
 }
 
 async function processState(convo, message) {
-  // Active (paid) users get full AI Marco
+  // Active (paid) users get full AI Marco with site editing
   if (convo.state === 'active') {
+    // 1. Retrieve current site HTML
+    const siteData = await getSiteHTML(convo.phone);
+
+    // 2. Fetch last 10 messages for conversation context
+    const msgResult = await pool.query(
+      'SELECT direction, body FROM messages WHERE phone = $1 ORDER BY created_at DESC LIMIT 10',
+      [convo.phone]
+    );
+    const history = msgResult.rows.reverse();
+
+    // 3. Build conversation history (Claude requires alternating user/assistant roles)
+    const messages = [];
+    for (const msg of history) {
+      const role = msg.direction === 'inbound' ? 'user' : 'assistant';
+      if (messages.length > 0 && messages[messages.length - 1].role === role) {
+        messages[messages.length - 1].content += '\n' + msg.body;
+      } else {
+        messages.push({ role, content: msg.body });
+      }
+    }
+
+    // Ensure current message is included (it may already be in messages table from webhook)
+    if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+      messages.push({ role: 'user', content: message });
+    } else {
+      // Current message is the last inbound, make sure it's there
+      const lastMsg = messages[messages.length - 1];
+      if (!lastMsg.content.includes(message)) {
+        lastMsg.content += '\n' + message;
+      }
+    }
+
+    // 4. Call Claude with site-aware system prompt
+    const systemPrompt = buildActiveSystemPrompt(siteData);
     const aiResponse = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 300,
-      system: `You are Marco, a grumpy waiter at a diner who happens to be a web design genius.
-
-Rules:
-- Short responses (under 160 chars when possible)
-- No sighs, no "ugh", no "*sigh*", no asterisk actions
-- Dry, slightly annoyed competence
-- You have their back but you won't be cheerful about it
-- You want to help them nail their business
-- When they ask for changes, just do it and confirm
-
-Example tone:
-- "done. refresh the page."
-- "what else."
-- "yeah I can do that. give me a sec."
-- "that's gonna look weird but ok. done."`,
-      messages: [{ role: 'user', content: message }]
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages
     });
-    return { response: aiResponse.content[0].text, newState: 'active', extracted: null };
+
+    const fullResponse = aiResponse.content[0].text;
+
+    // 5. Check for HTML markers indicating a site edit
+    const htmlMatch = fullResponse.match(/<!-- MARCO_HTML_START -->([\s\S]*?)<!-- MARCO_HTML_END -->/);
+
+    if (htmlMatch && siteData) {
+      // 6. Extract HTML and save + redeploy
+      const newHtml = htmlMatch[1].trim();
+      await saveSiteAndRedeploy(convo.phone, siteData.subdomain, newHtml, siteData.siteUrl);
+
+      // Strip HTML from the SMS reply — send only the conversational part
+      const conversationalReply = fullResponse
+        .replace(/<!-- MARCO_HTML_START -->[\s\S]*?<!-- MARCO_HTML_END -->/, '')
+        .trim();
+
+      return {
+        response: conversationalReply || "done. refresh the page.",
+        newState: 'active',
+        extracted: null
+      };
+    }
+
+    // 7. No HTML edit — return conversational response as-is
+    return { response: fullResponse, newState: 'active', extracted: null };
   }
 
   const state = STATES[convo.state];
@@ -280,6 +438,12 @@ async function generateSite(data) {
   const sitesDir = path.join(__dirname, 'sites');
   if (!fs.existsSync(sitesDir)) fs.mkdirSync(sitesDir, { recursive: true });
   fs.writeFileSync(path.join(sitesDir, `${subdomain}.html`), html);
+
+  // Save subdomain and HTML to database for active-mode editing
+  await pool.query(
+    'UPDATE conversations SET site_subdomain = $1, site_html = $2 WHERE phone = $3',
+    [subdomain, html, data.phone]
+  );
 
   // Try Cloudflare Pages if credentials exist
   if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
