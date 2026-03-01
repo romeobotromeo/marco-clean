@@ -142,8 +142,8 @@ async function getSiteHTML(phone) {
   return null;
 }
 
-function buildActiveSystemPrompt(siteData) {
-  const basePersonality = `You are Marco, a grumpy waiter at a diner who happens to be a web design genius.
+function buildActiveSystemPrompt(siteData, contactPhone) {
+  let basePersonality = `You are Marco, a grumpy waiter at a diner who happens to be a web design genius.
 
 Rules:
 - Short responses (under 160 chars when possible) for conversation
@@ -151,6 +151,10 @@ Rules:
 - Dry, slightly annoyed competence
 - You have their back but you won't be cheerful about it
 - You want to help them nail their business`;
+
+  if (!contactPhone) {
+    basePersonality += `\n\nIMPORTANT: You don't have a phone number for their site yet. At a natural point in conversation, ask what number they want displayed on their site. Keep it casual — don't force it.`;
+  }
 
   if (!siteData || !siteData.html) {
     return basePersonality + `\n\nThe user has a live site but you cannot access the HTML right now. Chat with them normally but let them know you're having trouble pulling up their site if they ask for changes.`;
@@ -209,61 +213,6 @@ async function saveSiteAndRedeploy(phone, subdomain, newHtml, currentSiteUrl) {
     }
   }
 }
-
-// --- State Machine ---
-const STATES = {
-  'greeting': {
-    response: "your new website is a few texts away. business or personal?",
-    nextState: "ask_type"
-  },
-  'ask_type': {
-    validation: (msg) => /business|personal|biz|company|myself|me/i.test(msg),
-    fallback: "business or personal?",
-    nextState: (msg) => /business|biz|company/i.test(msg) ? "ask_biz_name" : "ask_personal_name",
-    extraction: (msg) => ({ is_personal: /personal|myself|me/i.test(msg) })
-  },
-  'ask_biz_name': {
-    response: "what's the business called?",
-    nextState: "ask_biz_category",
-    smartExtract: "site_name"
-  },
-  'ask_biz_category': {
-    response: "what type of business?",
-    nextState: "ask_phone",
-    smartExtract: "site_type"
-  },
-  'ask_personal_name': {
-    response: "what should we name your site?",
-    nextState: "ask_personal_purpose",
-    smartExtract: "site_name"
-  },
-  'ask_personal_purpose': {
-    response: "what's it for?",
-    nextState: "ask_phone",
-    smartExtract: "site_type"
-  },
-  'ask_phone': {
-    response: "what's the best phone number for the site?",
-    nextState: "building",
-    smartExtract: "contact_phone"
-  },
-  'building': {
-    response: "ok I think I have what I need. give me 2 min",
-    action: "generateSite",
-    nextState: "awaiting_payment"
-  },
-  'awaiting_payment': {
-    response: "still waiting on that payment. $9.99 to keep your site live.",
-    nextState: "awaiting_payment"
-  },
-  'expired': {
-    response: "your draft expired. text me if you want to start over",
-    nextState: "greeting"
-  },
-  'active': {
-    // Full AI mode — handled separately in processState
-  }
-};
 
 async function getOrCreateConversation(phone) {
   const result = await pool.query('SELECT * FROM conversations WHERE phone = $1', [phone]);
@@ -336,7 +285,7 @@ async function processState(convo, message) {
     }
 
     // 4. Call Claude with site-aware system prompt
-    const systemPrompt = buildActiveSystemPrompt(siteData);
+    const systemPrompt = buildActiveSystemPrompt(siteData, convo.contact_phone);
     const aiResponse = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
@@ -370,32 +319,33 @@ async function processState(convo, message) {
     return { response: fullResponse, newState: 'active', extracted: null };
   }
 
-  const state = STATES[convo.state];
-  if (!state) {
-    return { response: "your new website is a few texts away. business or personal?", newState: "ask_type", extracted: null };
+  // --- greeting ---
+  if (convo.state === 'greeting') {
+    return {
+      response: "marco here. I build websites over text. what's your business called?",
+      newState: 'ask_name',
+      extracted: null
+    };
   }
 
-  // Validate if needed
-  if (state.validation && !state.validation(message)) {
-    return { response: state.fallback || "sorry, didn't catch that", newState: convo.state, extracted: null };
+  // --- ask_name ---
+  if (convo.state === 'ask_name') {
+    const name = await extractField(message, 'site_name');
+    return {
+      response: `${name}. nice. what type of business is it?`,
+      newState: 'ask_type',
+      extracted: { site_name: name }
+    };
   }
 
-  // Extract data — use Claude for smart extraction if configured
-  let extracted = null;
-  if (state.smartExtract) {
-    const value = await extractField(message, state.smartExtract);
-    extracted = { [state.smartExtract]: value };
-  } else if (state.extraction) {
-    extracted = state.extraction(message);
-  }
+  // --- ask_type ---
+  if (convo.state === 'ask_type') {
+    const type = await extractField(message, 'site_type');
 
-  // Determine next state
-  let nextState = typeof state.nextState === 'function'
-    ? state.nextState(message)
-    : state.nextState;
+    // Save type before generating so generateSite can read it
+    await updateConversation(convo.phone, 'ask_type', { site_type: type });
 
-  // Handle site generation
-  if (state.action === 'generateSite') {
+    // Generate site inline (no separate building state)
     const fullConvo = await pool.query('SELECT * FROM conversations WHERE phone = $1', [convo.phone]);
     const data = fullConvo.rows[0];
     const siteUrl = await generateSite(data);
@@ -411,16 +361,68 @@ async function processState(convo, message) {
 
     const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
     return {
-      response: `here's your first draft: ${siteUrl}\n\nlike it? pay $9.99 to keep it live: ${paymentLink}\n\nsite disappears in 48 hours if you don't`,
+      response: `here's your site: ${siteUrl}\n\n$9.99 to keep it live: ${paymentLink}`,
       newState: 'awaiting_payment',
       extracted: { site_url: siteUrl }
     };
   }
 
-  return { response: state.response, newState: nextState, extracted };
+  // --- awaiting_payment ---
+  if (convo.state === 'awaiting_payment') {
+    // Any response = user engaging with the paywall. Ask for secret password.
+    return {
+      response: "before you pay — got a secret password? 30 days free if you do.",
+      newState: 'ask_password',
+      extracted: null
+    };
+  }
+
+  // --- ask_password ---
+  if (convo.state === 'ask_password') {
+    if (message.trim().toLowerCase() === 'chowder') {
+      await pool.query(
+        `UPDATE conversations SET state = 'active', paid_at = NOW(), expires_at = NULL WHERE phone = $1`,
+        [convo.phone]
+      );
+      await pool.query(
+        `UPDATE customers SET status = 'launched', paid_at = NOW() WHERE phone = $1`,
+        [convo.phone]
+      );
+      return {
+        response: "that's it. 30 days free. your site is live. what do you want to change?",
+        newState: 'active',
+        extracted: null
+      };
+    }
+
+    // They don't know it — send them to Josh
+    return {
+      response: "ask josh for the secret password.",
+      newState: 'ask_password',
+      extracted: null
+    };
+  }
+
+  // --- expired ---
+  if (convo.state === 'expired') {
+    return {
+      response: "marco here. I build websites over text. what's your business called?",
+      newState: 'ask_name',
+      extracted: null
+    };
+  }
+
+  // --- unknown state (handles old states like ask_biz_name, ask_phone, etc.) ---
+  console.log(`Unknown state "${convo.state}" for ${convo.phone}, resetting to greeting flow`);
+  return {
+    response: "marco here. I build websites over text. what's your business called?",
+    newState: 'ask_name',
+    extracted: null
+  };
 }
 
 async function generateSite(data) {
+  console.log(`generateSite called — site_name: "${data.site_name}", site_type: "${data.site_type}"`);
   const subdomain = templateEngine.generateSubdomain(data.site_name || 'site');
 
   // Build config for template engine
@@ -461,6 +463,21 @@ async function generateSite(data) {
 }
 
 // --- Routes ---
+
+// Admin reset for testing
+app.post('/admin/reset/:phone', async (req, res) => {
+  const phone = '+' + req.params.phone;
+  try {
+    await pool.query(
+      `UPDATE conversations SET state = 'greeting', site_name = NULL, site_type = NULL, site_url = NULL, site_html = NULL, site_subdomain = NULL, paid_at = NULL, expires_at = NULL WHERE phone = $1`,
+      [phone]
+    );
+    await pool.query('DELETE FROM messages WHERE phone = $1', [phone]);
+    res.json({ success: true, message: `${phone} reset to greeting` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/', (req, res) => res.send('Marco is alive'));
 
