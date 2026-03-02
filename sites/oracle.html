@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Oracle — What Will the Future Hold?</title>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Lato', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* === TIE-DYE BACKGROUND === */
+.tie-dye-bg {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 20% 50%, #ff006680 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, #7b2ff780 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, #00d4ff80 0%, transparent 50%),
+    radial-gradient(ellipse at 10% 90%, #ff990080 0%, transparent 40%),
+    radial-gradient(ellipse at 90% 70%, #00ff8880 0%, transparent 40%),
+    radial-gradient(ellipse at 40% 30%, #ff00ff60 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, #ffff0060 0%, transparent 40%);
+  background-color: #1a0a2e;
+  animation: tieDyeShift 12s ease-in-out infinite alternate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+@keyframes tieDyeShift {
+  0% { background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%; }
+  33% { background-size: 120% 120%, 90% 110%, 110% 90%, 130% 100%, 95% 115%, 105% 95%, 115% 105%; }
+  66% { background-size: 95% 110%, 115% 95%, 90% 120%, 100% 110%, 120% 90%, 110% 115%, 90% 100%; }
+  100% { background-size: 110% 95%, 100% 115%, 120% 100%, 90% 120%, 110% 100%, 95% 110%, 105% 120%; }
+}
+
+/* === QUERY SECTION === */
+.query-section {
+  text-align: center;
+  max-width: 900px;
+  width: 100%;
+}
+
+.query-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.query-text {
+  font-size: clamp(24px, 4vw, 42px);
+  font-weight: 900;
+  color: white;
+  text-shadow: 0 0 20px rgba(255,255,255,0.3);
+  white-space: nowrap;
+}
+
+.query-input {
+  font-family: 'Lato', sans-serif;
+  font-size: clamp(20px, 3.5vw, 36px);
+  font-weight: 700;
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 3px solid rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  color: white;
+  outline: none;
+  min-width: 180px;
+  max-width: 400px;
+  text-align: center;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.query-input::placeholder {
+  color: rgba(255,255,255,0.4);
+  font-weight: 300;
+}
+
+.query-input:focus {
+  border-bottom-color: white;
+  background: rgba(255,255,255,0.15);
+  box-shadow: 0 4px 20px rgba(255,255,255,0.1);
+}
+
+/* === RAINBOW BUTTON === */
+.rainbow-btn {
+  font-family: 'Lato', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 18px 60px;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0088, #ff0000);
+  background-size: 200% 100%;
+  animation: rainbowSlide 3s linear infinite;
+  box-shadow: 0 4px 30px rgba(255,0,136,0.4), 0 0 60px rgba(0,136,255,0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.rainbow-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 40px rgba(255,0,136,0.6), 0 0 80px rgba(0,136,255,0.3);
+}
+
+.rainbow-btn:active { transform: scale(0.98); }
+
+.rainbow-btn::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%);
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes rainbowSlide {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) rotate(25deg); }
+  100% { transform: translateX(100%) rotate(25deg); }
+}
+
+/* === LOADING STATE === */
+.loading-container {
+  display: none;
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.loading-container.active { display: block; }
+
+.loading-orb {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 30px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0088);
+  background-size: 300% 300%;
+  animation: rainbowSlide 2s linear infinite, orbPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes orbPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(255,0,136,0.4); }
+  50% { transform: scale(1.2); box-shadow: 0 0 60px rgba(0,136,255,0.6); }
+}
+
+.loading-text {
+  color: white;
+  font-size: 18px;
+  font-weight: 300;
+  animation: loadFade 2s ease-in-out infinite;
+}
+
+@keyframes loadFade {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* === RESULTS PAGE === */
+.results-page {
+  display: none;
+  min-height: 100vh;
+  background: #f0e8d8;
+  padding: 0;
+}
+
+.results-page.active { display: block; }
+
+/* Results Header */
+.results-header {
+  background: linear-gradient(135deg, #1a0a2e, #2d1b69);
+  padding: 40px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.results-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    radial-gradient(ellipse at 30% 50%, #ff006630 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 30%, #7b2ff730 0%, transparent 50%);
+}
+
+.results-topic {
+  position: relative;
+  font-size: clamp(28px, 5vw, 48px);
+  font-weight: 900;
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0088);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: rainbowSlide 3s linear infinite;
+  margin-bottom: 8px;
+}
+
+.results-subtitle {
+  position: relative;
+  color: rgba(255,255,255,0.6);
+  font-size: 16px;
+  font-weight: 300;
+  letter-spacing: 2px;
+}
+
+/* Glitter Text Effect */
+.glitter {
+  position: relative;
+  background: linear-gradient(90deg, #ffd700, #fff, #ffd700, #fffacd, #ffd700);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: glitterShift 2s linear infinite;
+  filter: drop-shadow(0 0 2px rgba(255,215,0,0.5));
+}
+
+@keyframes glitterShift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* Report Body */
+.report-body {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 50px 30px;
+}
+
+.report-section {
+  margin-bottom: 40px;
+  padding: 30px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+  border-left: 4px solid;
+  transition: transform 0.2s;
+}
+
+.report-section:hover { transform: translateY(-2px); }
+
+.report-section:nth-child(1) { border-left-color: #ff0066; }
+.report-section:nth-child(2) { border-left-color: #ff8800; }
+.report-section:nth-child(3) { border-left-color: #00d4ff; }
+.report-section:nth-child(4) { border-left-color: #7b2ff7; }
+.report-section:nth-child(5) { border-left-color: #00ff88; }
+
+.section-icon { font-size: 28px; margin-bottom: 12px; }
+
+.section-title {
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.section-content {
+  font-size: 17px;
+  line-height: 1.7;
+  color: #333;
+  font-weight: 300;
+}
+
+.section-content strong {
+  font-weight: 700;
+  color: #1a0a2e;
+}
+
+/* Source Tags */
+.source-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.source-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 20px;
+  color: white;
+}
+
+.tag-trends { background: #ff0066; }
+.tag-historical { background: #ff8800; }
+.tag-human { background: #7b2ff7; }
+.tag-financial { background: #00d4ff; color: #1a0a2e; }
+.tag-political { background: #00ff88; color: #1a0a2e; }
+
+/* === PREDICTION SHELF === */
+.shelf-section {
+  padding: 50px 20px;
+  background: #e8dcc8;
+}
+
+.shelf-title {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: #888;
+  margin-bottom: 30px;
+}
+
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.shelf-tile {
+  aspect-ratio: 4/3;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+  color: white;
+}
+
+.shelf-tile:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+}
+
+.shelf-tile::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent 60%);
+  z-index: 1;
+}
+
+.tile-1 { background: linear-gradient(135deg, #ff0066, #ff8800); }
+.tile-2 { background: linear-gradient(135deg, #7b2ff7, #00d4ff); }
+.tile-3 { background: linear-gradient(135deg, #00ff88, #00d4ff); }
+.tile-4 { background: linear-gradient(135deg, #ff8800, #ffd700); }
+
+.tile-emoji { font-size: 36px; position: relative; z-index: 2; margin-bottom: 8px; }
+.tile-label { font-size: 16px; font-weight: 700; position: relative; z-index: 2; line-height: 1.3; }
+.tile-year { font-size: 12px; font-weight: 300; position: relative; z-index: 2; opacity: 0.7; margin-top: 4px; }
+
+/* === BACK BUTTON === */
+.back-btn {
+  display: block;
+  margin: 40px auto;
+  font-family: 'Lato', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 14px 40px;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0088, #ff0000);
+  background-size: 200% 100%;
+  animation: rainbowSlide 3s linear infinite;
+  box-shadow: 0 4px 20px rgba(255,0,136,0.3);
+  transition: transform 0.2s;
+}
+
+.back-btn:hover { transform: scale(1.05); }
+
+/* === FOOTER === */
+.footer {
+  text-align: center;
+  padding: 30px;
+  color: #aaa;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.footer a { color: #7b2ff7; text-decoration: none; }
+
+/* === MOBILE === */
+@media (max-width: 600px) {
+  .query-line { flex-direction: column; gap: 16px; }
+  .query-input { min-width: 90%; }
+  .report-body { padding: 30px 16px; }
+  .report-section { padding: 20px; }
+  .shelf-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- === QUERY PAGE === -->
+<div class="tie-dye-bg" id="queryPage">
+  <div class="query-section">
+    <div class="query-line">
+      <span class="query-text">what will</span>
+      <input type="text" class="query-input" id="topicInput" placeholder="anything..." autofocus>
+      <span class="query-text">be like in 3 years?</span>
+    </div>
+    <button class="rainbow-btn" id="submitBtn" onclick="submitQuery()">PREDICT THE FUTURE</button>
+  </div>
+
+  <div class="loading-container" id="loadingState">
+    <div class="loading-orb"></div>
+    <div class="loading-text" id="loadingText">consulting the oracle...</div>
+  </div>
+</div>
+
+<!-- === RESULTS PAGE === -->
+<div class="results-page" id="resultsPage">
+  <div class="results-header">
+    <div class="results-topic glitter" id="resultsTopic"></div>
+    <div class="results-subtitle">THE ORACLE HAS SPOKEN &mdash; 3 YEARS FROM NOW</div>
+  </div>
+
+  <div class="report-body" id="reportBody"></div>
+
+  <div class="shelf-section">
+    <div class="shelf-title">Related Predictions</div>
+    <div class="shelf-grid" id="shelfGrid"></div>
+  </div>
+
+  <button class="back-btn" onclick="goBack()">ASK ANOTHER QUESTION</button>
+
+  <div class="footer">
+    Built with <a href="https://textmarco.com">Marco</a>
+  </div>
+</div>
+
+<script>
+const predictions = {
+  default: {
+    trends: { icon: "📈", title: "Trend Analysis", content: "The cultural momentum behind <strong>{topic}</strong> is undeniable. Search interest has grown 340% in the last 18 months. By 2029, we're looking at full mainstream saturation — your uncle will be talking about it at Thanksgiving. Sorry." },
+    historical: { icon: "📚", title: "Historical Patterns", content: "History doesn't repeat, but it rhymes badly. Based on similar cultural shifts (the internet in '98, crypto in '17, AI in '23), <strong>{topic}</strong> is currently in the 'people are skeptical but secretly curious' phase. In 3 years? 'I was into it before it was cool' phase." },
+    human: { icon: "🧠", title: "Human Analysis", content: "Here's the thing about humans: we're predictable. When something makes us feel smart and confused at the same time, we can't look away. <strong>{topic}</strong> hits that sweet spot perfectly. Expect think pieces, podcasts, and at least one Netflix documentary." },
+    financial: { icon: "💰", title: "Financial Indicators", content: "Follow the money. VC funding in <strong>{topic}</strong>-adjacent startups is up 280%. The big players are quietly hiring. When corporations start making awkward Super Bowl ads about it, you'll know it's peaked. We give that about 2.5 years." },
+    political: { icon: "🏛️", title: "Political Climate", content: "Some senator will definitely try to regulate <strong>{topic}</strong> without understanding it. There'll be a hearing. Someone will print out a screenshot. The internet will meme it. Policy will lag 5 years behind reality, as is tradition." }
+  }
+};
+
+const relatedPredictions = [
+  { emoji: "🤖", label: "Will AI replace creative jobs?", year: "2029", class: "tile-1" },
+  { emoji: "🌍", label: "What will remote work look like?", year: "2029", class: "tile-2" },
+  { emoji: "🧬", label: "How will health tech evolve?", year: "2029", class: "tile-3" },
+  { emoji: "🎮", label: "The future of entertainment", year: "2029", class: "tile-4" }
+];
+
+const loadingMessages = [
+  "consulting the oracle...",
+  "analyzing trend data...",
+  "scanning financial indicators...",
+  "reading the political tea leaves...",
+  "consulting historical patterns...",
+  "asking the humans...",
+  "generating your prediction..."
+];
+
+function submitQuery() {
+  const topic = document.getElementById('topicInput').value.trim();
+  if (!topic) {
+    document.getElementById('topicInput').focus();
+    return;
+  }
+
+  const querySection = document.querySelector('.query-section');
+  const loading = document.getElementById('loadingState');
+  querySection.style.display = 'none';
+  loading.classList.add('active');
+
+  let msgIndex = 0;
+  const msgInterval = setInterval(() => {
+    msgIndex = (msgIndex + 1) % loadingMessages.length;
+    document.getElementById('loadingText').textContent = loadingMessages[msgIndex];
+  }, 1500);
+
+  setTimeout(() => {
+    clearInterval(msgInterval);
+    showResults(topic);
+  }, 5000);
+}
+
+function showResults(topic) {
+  document.getElementById('queryPage').style.display = 'none';
+  document.getElementById('resultsPage').classList.add('active');
+  document.getElementById('resultsTopic').textContent = topic.toUpperCase();
+
+  const pred = predictions.default;
+  const reportBody = document.getElementById('reportBody');
+  reportBody.innerHTML = '';
+
+  const sections = ['trends', 'historical', 'human', 'financial', 'political'];
+  const tagClasses = { trends: 'tag-trends', historical: 'tag-historical', human: 'tag-human', financial: 'tag-financial', political: 'tag-political' };
+  const tagLabels = { trends: 'Trends', historical: 'Historical', human: 'Human Intel', financial: 'Financial', political: 'Political' };
+
+  sections.forEach((key, i) => {
+    const s = pred[key];
+    const div = document.createElement('div');
+    div.className = 'report-section';
+    div.style.animationDelay = (i * 0.1) + 's';
+    div.innerHTML = `
+      <div class="section-icon">${s.icon}</div>
+      <div class="section-title">${s.title}</div>
+      <div class="section-content">${s.content.replace(/\{topic\}/g, topic)}</div>
+      <div class="source-tags">
+        <span class="source-tag ${tagClasses[key]}">${tagLabels[key]}</span>
+      </div>
+    `;
+    reportBody.appendChild(div);
+  });
+
+  // Related predictions shelf
+  const shelf = document.getElementById('shelfGrid');
+  shelf.innerHTML = '';
+  const topicRelated = [
+    { emoji: "🔮", label: `More on ${topic}`, year: "Deep Dive", class: "tile-1" },
+    ...relatedPredictions.slice(0, 3)
+  ];
+
+  topicRelated.forEach(p => {
+    const tile = document.createElement('div');
+    tile.className = `shelf-tile ${p.class}`;
+    tile.innerHTML = `
+      <div class="tile-emoji">${p.emoji}</div>
+      <div class="tile-label">${p.label}</div>
+      <div class="tile-year">${p.year}</div>
+    `;
+    tile.onclick = () => {
+      if (p.label.startsWith('More on')) return;
+      goBack();
+      setTimeout(() => {
+        document.getElementById('topicInput').value = p.label.replace('Will ', '').replace('?', '').replace('The future of ', '');
+      }, 100);
+    };
+    shelf.appendChild(tile);
+  });
+
+  window.scrollTo(0, 0);
+}
+
+function goBack() {
+  document.getElementById('resultsPage').classList.remove('active');
+  document.getElementById('queryPage').style.display = 'flex';
+  document.querySelector('.query-section').style.display = 'block';
+  document.getElementById('loadingState').classList.remove('active');
+  document.getElementById('topicInput').value = '';
+  document.getElementById('topicInput').focus();
+}
+
+// Enter key submits
+document.getElementById('topicInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitQuery();
+});
+</script>
+</body>
+</html>
