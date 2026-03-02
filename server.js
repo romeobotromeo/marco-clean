@@ -538,6 +538,48 @@ async function generateSite(data) {
 
 // --- Routes ---
 
+// Admin deploy — manually deploy a site to Cloudflare and text the user
+app.post('/admin/deploy/:phone', async (req, res) => {
+  const phone = '+' + req.params.phone;
+  const { subdomain, message } = req.body;
+  try {
+    const sitePath = path.join(__dirname, 'sites', `${subdomain}.html`);
+    if (!fs.existsSync(sitePath)) {
+      return res.status(404).json({ error: `No site file found: sites/${subdomain}.html` });
+    }
+    const html = fs.readFileSync(sitePath, 'utf8');
+    let siteUrl = `https://marco-clean.onrender.com/sites/${subdomain}`;
+
+    // Try Cloudflare
+    if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
+      const result = await deployer.deployWebsite(subdomain, html, subdomain);
+      if (result.success && result.method !== 'simulation') {
+        siteUrl = result.url;
+      }
+    }
+
+    // Update DB
+    await pool.query(
+      `UPDATE conversations SET site_url = $1, site_subdomain = $2, site_html = $3, state = 'active', paid_at = NOW(), expires_at = NULL WHERE phone = $4`,
+      [siteUrl, subdomain, html, phone]
+    );
+    await pool.query(
+      `UPDATE customers SET status = 'launched', site_url = $1, paid_at = NOW() WHERE phone = $2`,
+      [siteUrl, phone]
+    );
+
+    // Text them
+    const convo = await pool.query('SELECT sendblue_number FROM conversations WHERE phone = $1', [phone]);
+    const marcoNumber = convo.rows[0]?.sendblue_number || '';
+    const smsMessage = message || `josh did you a solid. let me know what you think: ${siteUrl}`;
+    await sendReply(phone, smsMessage, marcoNumber);
+
+    res.json({ success: true, url: siteUrl, message: `Deployed ${subdomain} and texted ${phone}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin bypass — instant activation for live demos (skips payment + password)
 app.post('/admin/bypass/:phone', async (req, res) => {
   const phone = '+' + req.params.phone;
