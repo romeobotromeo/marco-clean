@@ -406,15 +406,44 @@ async function processState(convo, message) {
 
   // --- awaiting_payment ---
   if (convo.state === 'awaiting_payment') {
-    // Any response = user engaging with the paywall. Ask for secret password.
+    const msg = message.trim().toLowerCase();
+
+    // They already know the password
+    if (msg === 'chowder') {
+      await pool.query(
+        `UPDATE conversations SET state = 'active', paid_at = NOW(), expires_at = NULL WHERE phone = $1`,
+        [convo.phone]
+      );
+      await pool.query(
+        `UPDATE customers SET status = 'launched', paid_at = NOW() WHERE phone = $1`,
+        [convo.phone]
+      );
+      return {
+        response: "that's the one. 30 days free. your site is live. what do you want to change?",
+        newState: 'active',
+        extracted: null
+      };
+    }
+
+    // They mention Josh or a free deal — start the password game
+    if (/josh|free|hook.?up|password|deal|told me|said i|gave me|free month|free trial/i.test(message)) {
+      return {
+        response: "josh huh? prove it. what's the secret password?",
+        newState: 'ask_password',
+        extracted: null
+      };
+    }
+
+    // Normal response — payment nag
+    const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
     return {
-      response: "before you pay — got a secret password? 30 days free if you do.",
-      newState: 'ask_password',
+      response: `still waiting on that payment. $9.99: ${paymentLink}`,
+      newState: 'awaiting_payment',
       extracted: null
     };
   }
 
-  // --- ask_password ---
+  // --- ask_password (they claimed Josh sent them, now prove it) ---
   if (convo.state === 'ask_password') {
     if (message.trim().toLowerCase() === 'chowder') {
       await pool.query(
@@ -426,15 +455,15 @@ async function processState(convo, message) {
         [convo.phone]
       );
       return {
-        response: "that's it. 30 days free. your site is live. what do you want to change?",
+        response: "that's the one. 30 days free. your site is live. what do you want to change?",
         newState: 'active',
         extracted: null
       };
     }
 
-    // They don't know it — send them to Josh
+    // Wrong answer — send them back to Josh
     return {
-      response: "ask josh for the secret password.",
+      response: "nice try. go ask josh for the secret password.",
       newState: 'ask_password',
       extracted: null
     };
@@ -500,6 +529,27 @@ async function generateSite(data) {
 }
 
 // --- Routes ---
+
+// Admin bypass — instant activation for live demos (skips payment + password)
+app.post('/admin/bypass/:phone', async (req, res) => {
+  const phone = '+' + req.params.phone;
+  try {
+    await pool.query(
+      `UPDATE conversations SET state = 'active', paid_at = NOW(), expires_at = NULL WHERE phone = $1`,
+      [phone]
+    );
+    await pool.query(
+      `UPDATE customers SET status = 'launched', paid_at = NOW() WHERE phone = $1`,
+      [phone]
+    );
+    const convo = await pool.query('SELECT sendblue_number FROM conversations WHERE phone = $1', [phone]);
+    const marcoNumber = convo.rows[0]?.sendblue_number || '';
+    await sendReply(phone, "you're in. site is live. what do you want to change?", marcoNumber);
+    res.json({ success: true, message: `${phone} bypassed — now active` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Admin reset for testing
 app.post('/admin/reset/:phone', async (req, res) => {
