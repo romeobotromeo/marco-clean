@@ -538,6 +538,40 @@ async function generateSite(data) {
 
 // --- Routes ---
 
+// Admin diagnostic — test Cloudflare connection
+app.get('/admin/cloudflare-test', async (req, res) => {
+  const info = {
+    hasAccountId: !!process.env.CLOUDFLARE_ACCOUNT_ID,
+    accountIdPrefix: process.env.CLOUDFLARE_ACCOUNT_ID ? process.env.CLOUDFLARE_ACCOUNT_ID.substring(0, 6) + '...' : null,
+    hasApiToken: !!process.env.CLOUDFLARE_API_TOKEN,
+    tokenPrefix: process.env.CLOUDFLARE_API_TOKEN ? process.env.CLOUDFLARE_API_TOKEN.substring(0, 6) + '...' : null,
+    simulateMode: deployer.simulateMode
+  };
+
+  // Test the API if credentials exist
+  if (info.hasAccountId && info.hasApiToken) {
+    try {
+      const projects = await deployer.listProjects();
+      info.apiWorking = true;
+      info.projectCount = projects.length;
+      info.projectNames = projects.map(p => p.name);
+    } catch (err) {
+      info.apiWorking = false;
+      info.apiError = err.response?.data || err.message;
+    }
+
+    // Try a test deploy
+    try {
+      const testResult = await deployer.deployWebsite('test-deploy', '<html><body>test</body></html>', 'Test');
+      info.testDeploy = { success: testResult.success, method: testResult.method, url: testResult.url, error: testResult.error };
+    } catch (err) {
+      info.testDeploy = { success: false, error: err.response?.data || err.message };
+    }
+  }
+
+  res.json(info);
+});
+
 // Admin deploy — manually deploy a site to Cloudflare and text the user
 app.post('/admin/deploy/:phone', async (req, res) => {
   const phone = '+' + req.params.phone;
