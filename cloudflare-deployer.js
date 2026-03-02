@@ -1,144 +1,140 @@
-// MARCO CLEAN Cloudflare Pages Deployment System - Phase 3
-// Deploys generated websites to live URLs via Cloudflare Pages API
+// Cloudflare Pages Direct Upload Deployer
+// Deploys single-page HTML sites to subdomain.textmarco.com
 
 const axios = require('axios');
-const FormData = require('form-data');
+const crypto = require('crypto');
 
 class CloudflareDeployer {
   constructor() {
     this.accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     this.apiToken = process.env.CLOUDFLARE_API_TOKEN;
     this.baseUrl = `https://api.cloudflare.com/client/v4/accounts/${this.accountId}`;
-    
+
     if (!this.accountId || !this.apiToken) {
-      console.warn('⚠️  Cloudflare credentials not configured - deployment will be simulated');
+      console.warn('Cloudflare credentials not configured - deployment will be simulated');
       this.simulateMode = true;
     } else {
       this.simulateMode = false;
-      console.log('☁️  Cloudflare deployer initialized');
+      console.log('Cloudflare deployer initialized');
     }
   }
 
-  // Deploy a website to Cloudflare Pages
   async deployWebsite(subdomain, htmlContent, businessName) {
-    console.log(`🚀 Starting deployment: ${subdomain}.textmarco.com`);
-    
+    console.log(`Deploying: ${subdomain}.textmarco.com`);
+
     try {
       if (this.simulateMode) {
-        return this.simulateDeployment(subdomain, htmlContent, businessName);
+        return this.simulateDeployment(subdomain, htmlContent);
       }
-      
-      // Real Cloudflare Pages deployment
-      const deploymentResult = await this.createPagesProject(subdomain, htmlContent, businessName);
-      
-      console.log(`✅ Deployment successful: https://${subdomain}.textmarco.com`);
-      
+
+      // Step 1: Ensure project exists
+      await this.ensureProject(subdomain);
+
+      // Step 2: Get upload token
+      const uploadToken = await this.getUploadToken(subdomain);
+
+      // Step 3: Hash the file and upload it
+      const fileHash = crypto.createHash('md5')
+        .update(Buffer.from(htmlContent))
+        .digest('hex');
+
+      await this.uploadFiles(uploadToken, htmlContent, fileHash);
+
+      // Step 4: Create deployment with manifest
+      const deployment = await this.createDeployment(subdomain, fileHash);
+
+      const url = `https://${subdomain}.textmarco.com`;
+      console.log(`Deployment successful: ${url}`);
+
       return {
         success: true,
-        url: `https://${subdomain}.textmarco.com`,
-        deployId: deploymentResult.id,
-        subdomain: subdomain,
+        url,
+        deployId: deployment.id,
+        subdomain,
         method: 'cloudflare'
       };
-      
+
     } catch (error) {
-      console.error(`❌ Deployment failed for ${subdomain}:`, error.message);
-      
+      const errorDetail = error.response?.data || error.message;
+      console.error(`Deployment failed for ${subdomain}:`, JSON.stringify(errorDetail));
+
       return {
         success: false,
-        error: error.message,
-        subdomain: subdomain,
+        error: typeof errorDetail === 'object' ? JSON.stringify(errorDetail) : errorDetail,
+        subdomain,
         method: 'cloudflare'
       };
     }
   }
 
-  // Create Cloudflare Pages project and deploy
-  async createPagesProject(subdomain, htmlContent, businessName) {
-    // Step 1: Create or update Pages project
-    const projectData = {
-      name: subdomain,
-      subdomain: subdomain,
-      domains: [`${subdomain}.textmarco.com`],
-      source: {
-        type: 'direct_upload'
-      },
-      deployment_configs: {
-        production: {
-          build_command: '',
-          destination_dir: '/',
-          root_dir: '/',
-          web_analytics_tag: null,
-          web_analytics_token: null
-        }
-      }
-    };
-
-    // Check if project exists
-    let project;
+  async ensureProject(subdomain) {
     try {
-      const existingProject = await axios.get(
+      await axios.get(
         `${this.baseUrl}/pages/projects/${subdomain}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
+        { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
       );
-      project = existingProject.data.result;
-      console.log(`📦 Using existing project: ${subdomain}`);
+      console.log(`Using existing project: ${subdomain}`);
     } catch (error) {
-      // Project doesn't exist, create it
       if (error.response?.status === 404) {
-        const newProject = await axios.post(
+        // Create new project
+        await axios.post(
           `${this.baseUrl}/pages/projects`,
-          projectData,
           {
-            headers: {
-              'Authorization': `Bearer ${this.apiToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
+            name: subdomain,
+            production_branch: 'main'
+          },
+          { headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Content-Type': 'application/json' } }
         );
-        project = newProject.data.result;
-        console.log(`📦 Created new project: ${subdomain}`);
+        console.log(`Created new project: ${subdomain}`);
       } else {
         throw error;
       }
     }
+  }
 
-    // Step 2: Upload files and create deployment
-    const formData = new FormData();
-    
-    // Create the file structure
-    const files = {
-      'index.html': htmlContent
-    };
-    
-    // Add files to form data
-    Object.entries(files).forEach(([filename, content]) => {
-      formData.append('files', content, {
-        filename: filename,
-        contentType: 'text/html'
-      });
-    });
-    
-    // Add manifest
-    const manifest = {
-      '/': { 
-        file: 'index.html',
+  async getUploadToken(subdomain) {
+    const resp = await axios.get(
+      `${this.baseUrl}/pages/projects/${subdomain}/upload-token`,
+      { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
+    );
+    return resp.data.result.jwt;
+  }
+
+  async uploadFiles(uploadToken, htmlContent, fileHash) {
+    const fileBase64 = Buffer.from(htmlContent).toString('base64');
+
+    await axios.post(
+      `https://api.cloudflare.com/client/v4/pages/assets/upload?base64=true`,
+      [
+        {
+          key: fileHash,
+          value: fileBase64,
+          metadata: { contentType: 'text/html' },
+          base64: true
+        }
+      ],
+      {
         headers: {
-          'Content-Type': 'text/html; charset=utf-8'
+          'Authorization': `Bearer ${uploadToken}`,
+          'Content-Type': 'application/json'
         }
       }
-    };
-    
-    formData.append('manifest', JSON.stringify(manifest));
+    );
+    console.log(`File uploaded: hash=${fileHash}`);
+  }
 
-    // Create deployment
-    const deployment = await axios.post(
-      `${this.baseUrl}/pages/projects/${project.name}/deployments`,
+  async createDeployment(subdomain, fileHash) {
+    // Manifest maps URL paths to file hashes
+    const manifest = JSON.stringify({
+      '/index.html': fileHash
+    });
+
+    const FormData = require('form-data');
+    const formData = new FormData();
+    formData.append('manifest', manifest);
+
+    const resp = await axios.post(
+      `${this.baseUrl}/pages/projects/${subdomain}/deployments`,
       formData,
       {
         headers: {
@@ -148,128 +144,38 @@ class CloudflareDeployer {
       }
     );
 
-    console.log(`🌐 Deployment created: ${deployment.data.result.id}`);
-    
-    return {
-      id: deployment.data.result.id,
-      url: deployment.data.result.url,
-      project: project
-    };
+    console.log(`Deployment created: ${resp.data.result.id}`);
+    return resp.data.result;
   }
 
-  // Simulate deployment for testing/development
-  async simulateDeployment(subdomain, htmlContent, businessName) {
-    console.log(`🎭 Simulating deployment for: ${subdomain}`);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Save to local file system for testing
-    const fs = require('fs');
-    const path = require('path');
-    
-    const deployDir = path.join(__dirname, '../deployed-sites');
-    if (!fs.existsSync(deployDir)) {
-      fs.mkdirSync(deployDir, { recursive: true });
-    }
-    
-    const filePath = path.join(deployDir, `${subdomain}.html`);
-    fs.writeFileSync(filePath, htmlContent);
-    
-    console.log(`📁 Simulated deployment saved: ${filePath}`);
-    
+  async simulateDeployment(subdomain, htmlContent) {
+    console.log(`Simulating deployment for: ${subdomain}`);
     return {
       success: true,
-      url: `https://${subdomain}.textmarco.com`, // Simulated URL
+      url: `https://${subdomain}.textmarco.com`,
       deployId: `sim-${Date.now()}`,
-      subdomain: subdomain,
-      method: 'simulation',
-      localPath: filePath
+      subdomain,
+      method: 'simulation'
     };
   }
 
-  // Get deployment status
-  async getDeploymentStatus(projectName, deploymentId) {
-    if (this.simulateMode) {
-      return {
-        status: 'success',
-        stage: 'deploy',
-        deployment_trigger: {
-          metadata: {
-            branch: 'main',
-            commit_hash: 'simulated'
-          }
-        }
-      };
-    }
-
-    try {
-      const response = await axios.get(
-        `${this.baseUrl}/pages/projects/${projectName}/deployments/${deploymentId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      return response.data.result;
-    } catch (error) {
-      console.error('Failed to get deployment status:', error.message);
-      throw error;
-    }
-  }
-
-  // List all projects (for debugging)
   async listProjects() {
-    if (this.simulateMode) {
-      console.log('🎭 Simulation mode - no real projects to list');
-      return [];
-    }
-
-    try {
-      const response = await axios.get(
-        `${this.baseUrl}/pages/projects`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      return response.data.result;
-    } catch (error) {
-      console.error('Failed to list projects:', error.message);
-      throw error;
-    }
+    if (this.simulateMode) return [];
+    const response = await axios.get(
+      `${this.baseUrl}/pages/projects`,
+      { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
+    );
+    return response.data.result;
   }
 
-  // Delete a project (for cleanup)
   async deleteProject(projectName) {
-    if (this.simulateMode) {
-      console.log(`🎭 Would delete project: ${projectName}`);
-      return { success: true };
-    }
-
-    try {
-      await axios.delete(
-        `${this.baseUrl}/pages/projects/${projectName}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      console.log(`🗑️  Deleted project: ${projectName}`);
-      return { success: true };
-    } catch (error) {
-      console.error(`Failed to delete project ${projectName}:`, error.message);
-      throw error;
-    }
+    if (this.simulateMode) return { success: true };
+    await axios.delete(
+      `${this.baseUrl}/pages/projects/${projectName}`,
+      { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
+    );
+    console.log(`Deleted project: ${projectName}`);
+    return { success: true };
   }
 }
 
