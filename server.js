@@ -851,6 +851,44 @@ app.post('/sms-twilio', async (req, res) => {
   }
 });
 
+// --- Send reminders to users silent for 24+ hours (called by cron) ---
+app.post('/send-reminders', async (req, res) => {
+  try {
+    const stale = await pool.query(
+      `SELECT phone, state, site_url, sendblue_number FROM conversations
+       WHERE state IN ('ask_name', 'ask_type', 'awaiting_payment')
+       AND updated_at < NOW() - INTERVAL '24 hours'`
+    );
+
+    const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
+
+    const reminders = {
+      ask_name: "hey, still there? marco here. what's your business called?",
+      ask_type: "you ghosted me. what type of business is it?",
+      awaiting_payment: `your site's still waiting. $9.99 to keep it live: ${paymentLink}`
+    };
+
+    for (const row of stale.rows) {
+      const message = reminders[row.state];
+      if (!message) continue;
+
+      console.log(`Sending reminder to ${row.phone} (state: ${row.state})`);
+      try {
+        await sendReply(row.phone, message, row.sendblue_number);
+        await pool.query('UPDATE conversations SET updated_at = NOW() WHERE phone = $1', [row.phone]);
+        await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [row.phone, 'outbound', message]);
+      } catch (err) {
+        console.error(`Reminder failed for ${row.phone}:`, err.response?.data || err.message);
+      }
+    }
+
+    res.json({ reminded: stale.rows.length });
+  } catch (err) {
+    console.error('Reminder error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Cleanup expired sites (called by cron) ---
 app.post('/cleanup-expired', async (req, res) => {
   try {
