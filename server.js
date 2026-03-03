@@ -65,6 +65,14 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
   res.sendStatus(200);
 });
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://textmarco.com');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(__dirname));
@@ -681,8 +689,9 @@ app.get('/sites/:slug', (req, res) => {
 });
 
 app.post('/waitlist', async (req, res) => {
-  const phone = req.body.phone || '';
-  console.log(`Waitlist signup: ${phone}`);
+  const raw = req.body.phone || '';
+  const phone = raw.startsWith('+') ? raw : `+1${raw.replace(/\D/g, '')}`;
+  console.log(`Waitlist signup: ${raw} → normalized: ${phone}`);
   try {
     await pool.query(
       'INSERT INTO customers (phone, status) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING',
@@ -695,9 +704,10 @@ app.post('/waitlist', async (req, res) => {
     );
     // Send them the waitlist confirmation via SMS
     try {
-      await sendSMS(phone, "you're on the list. marco will be right with you — your dream site is just a few texts away.");
+      await sendSMS(phone, "you're on the list. marco will be right with you — your dream site is just a few texts away.", MARCO_NUMBERS.primary);
+      console.log(`Waitlist SMS sent to ${phone}`);
     } catch (smsErr) {
-      console.error('Failed to send waitlist SMS:', smsErr.response?.data || smsErr.message);
+      console.error(`WAITLIST SMS FAILED for ${phone}:`, smsErr.response?.data || smsErr.message);
     }
     res.json({ success: true, message: 'Thanks for signing up! Marco will reach out soon.' });
   } catch (err) {
