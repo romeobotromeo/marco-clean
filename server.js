@@ -80,6 +80,25 @@ app.use(express.static(__dirname));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// --- SendBlue contact registration ---
+async function registerSendBlueContact(phone) {
+  try {
+    await axios.post('https://api.sendblue.co/api/v2/contacts', {
+      number: phone,
+      update_if_exists: true
+    }, {
+      headers: {
+        'sb-api-key-id': process.env.SENDBLUE_API_KEY,
+        'sb-api-secret-key': process.env.SENDBLUE_API_SECRET,
+        'Content-Type': 'application/json'
+      }
+    });
+    console.log(`SendBlue contact registered: ${phone}`);
+  } catch (err) {
+    console.error(`SendBlue contact registration failed for ${phone}:`, err.response?.data || err.message);
+  }
+}
+
 // --- SMS helpers ---
 
 // SendBlue (623 number)
@@ -702,6 +721,9 @@ app.post('/waitlist', async (req, res) => {
       'INSERT INTO conversations (phone, state) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING',
       [phone, 'waitlist']
     );
+    // Register in SendBlue contacts
+    await registerSendBlueContact(phone);
+
     // Send them the waitlist confirmation via SMS
     try {
       await sendSMS(phone, "you're on the list. marco will be right with you — your dream site is just a few texts away.", MARCO_NUMBERS.primary);
@@ -758,6 +780,9 @@ app.post('/sms', async (req, res) => {
     if (sendblueNumber && !convo.sendblue_number) {
       await pool.query('UPDATE conversations SET sendblue_number = $1 WHERE phone = $2', [sendblueNumber, from]);
     }
+
+    // Register in SendBlue contacts (safe to call every time — update_if_exists handles duplicates)
+    await registerSendBlueContact(from);
 
     // Process through state machine
     const result = await processState(convo, body);
