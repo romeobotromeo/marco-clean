@@ -12,7 +12,7 @@ const deployer = new CloudflareDeployer();
 
 // Marco phone numbers
 const MARCO_NUMBERS = {
-  primary: '+16235557501',   // 623 number (current)
+  primary: '+16232843671',   // 623 number (current)
   toll_free: '+18889007501'  // 888 number (testing)
 };
 
