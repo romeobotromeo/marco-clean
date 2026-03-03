@@ -394,48 +394,97 @@ async function processState(convo, message) {
   // --- greeting ---
   if (convo.state === 'greeting') {
     return {
-      response: "marco here. I build websites over text. what's your business called?",
-      newState: 'ask_name',
+      response: "marco here. business site or personal site?",
+      newState: 'ask_biz_or_personal',
       extracted: null
     };
   }
 
-  // --- ask_name ---
-  if (convo.state === 'ask_name') {
+  // --- ask_biz_or_personal ---
+  if (convo.state === 'ask_biz_or_personal') {
+    const isPersonal = /personal|hobby|portfolio|myself|just me/i.test(message);
+    if (isPersonal) {
+      return {
+        response: "got it. what should we name your site?",
+        newState: 'ask_personal_name',
+        extracted: { is_personal: true }
+      };
+    }
+    return {
+      response: "nice. what's the business called?",
+      newState: 'ask_biz_name',
+      extracted: { is_personal: false }
+    };
+  }
+
+  // --- ask_biz_name ---
+  if (convo.state === 'ask_biz_name') {
     const name = await extractField(message, 'site_name');
     return {
-      response: `${name}. nice. what type of business is it?`,
-      newState: 'ask_type',
+      response: `${name}. what type of business?`,
+      newState: 'ask_biz_type',
       extracted: { site_name: name }
     };
   }
 
-  // --- ask_type ---
-  if (convo.state === 'ask_type') {
+  // --- ask_biz_type ---
+  if (convo.state === 'ask_biz_type') {
     const type = await extractField(message, 'site_type');
-
-    // Save type before generating so generateSite can read it
-    await updateConversation(convo.phone, 'ask_type', { site_type: type });
-
-    // Generate site inline (no separate building state)
-    const fullConvo = await pool.query('SELECT * FROM conversations WHERE phone = $1', [convo.phone]);
-    const data = fullConvo.rows[0];
-    const siteUrl = await generateSite(data);
-
-    await pool.query(
-      "UPDATE conversations SET expires_at = NOW() + INTERVAL '48 hours', site_url = $1 WHERE phone = $2",
-      [siteUrl, convo.phone]
-    );
-    await pool.query(
-      'UPDATE customers SET status = $1, site_url = $2 WHERE phone = $3',
-      ['building', siteUrl, convo.phone]
-    );
-
-    const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
     return {
-      response: `here's your site: ${siteUrl}\n\n$9.99 to keep it live: ${paymentLink}`,
-      newState: 'awaiting_payment',
-      extracted: { site_url: siteUrl }
+      response: "new business or already established?",
+      newState: 'ask_new_or_existing',
+      extracted: { site_type: type }
+    };
+  }
+
+  // --- ask_new_or_existing ---
+  if (convo.state === 'ask_new_or_existing') {
+    const isExisting = /existing|established|years|already|open|running|operating|been around/i.test(message);
+    return {
+      response: "what number should go on the site? customers will call and text this number.",
+      newState: 'ask_phone',
+      extracted: { is_existing: isExisting }
+    };
+  }
+
+  // --- ask_personal_name ---
+  if (convo.state === 'ask_personal_name') {
+    const name = await extractField(message, 'site_name');
+    return {
+      response: `${name}. what's it for — portfolio, hobby, project?`,
+      newState: 'ask_personal_purpose',
+      extracted: { site_name: name }
+    };
+  }
+
+  // --- ask_personal_purpose ---
+  if (convo.state === 'ask_personal_purpose') {
+    const type = await extractField(message, 'site_type');
+    return {
+      response: "what number should go on the site?",
+      newState: 'ask_phone',
+      extracted: { site_type: type }
+    };
+  }
+
+  // --- ask_phone ---
+  if (convo.state === 'ask_phone') {
+    const rawPhone = await extractField(message, 'contact_phone');
+    const contactPhone = rawPhone.startsWith('+') ? rawPhone : `+1${rawPhone.replace(/\D/g, '')}`;
+    return {
+      response: "on it. give me a couple minutes.",
+      newState: 'building',
+      extracted: { contact_phone: contactPhone },
+      triggerBuild: true
+    };
+  }
+
+  // --- building (in case they text while site is being generated) ---
+  if (convo.state === 'building') {
+    return {
+      response: "still building. almost there.",
+      newState: 'building',
+      extracted: null
     };
   }
 
@@ -507,60 +556,131 @@ async function processState(convo, message) {
   // --- expired ---
   if (convo.state === 'expired') {
     return {
-      response: "marco here. I build websites over text. what's your business called?",
-      newState: 'ask_name',
+      response: "marco here. business site or personal site?",
+      newState: 'ask_biz_or_personal',
       extracted: null
     };
   }
 
-  // --- unknown state (handles old states like ask_biz_name, ask_phone, etc.) ---
+  // --- unknown state fallback ---
   console.log(`Unknown state "${convo.state}" for ${convo.phone}, resetting to greeting flow`);
   return {
-    response: "marco here. I build websites over text. what's your business called?",
-    newState: 'ask_name',
+    response: "marco here. business site or personal site?",
+    newState: 'ask_biz_or_personal',
     extracted: null
   };
 }
 
-async function generateSite(data) {
-  console.log(`generateSite called — site_name: "${data.site_name}", site_type: "${data.site_type}"`);
-  const subdomain = templateEngine.generateSubdomain(data.site_name || 'site');
+function generateSubdomain(name) {
+  return (name || 'site').toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 28) + '-' + Math.random().toString(36).slice(2, 6);
+}
 
-  // Build config for template engine
-  const config = {
-    businessName: data.site_name || 'My Business',
-    businessPhone: data.contact_phone || '',
-    services: data.site_type ? [data.site_type] : [],
-    template: null // auto-detect from services
-  };
+async function generateSiteWithClaude(data) {
+  const businessName = data.site_name || 'My Business';
+  const businessType = data.site_type || 'service business';
+  const phone = data.contact_phone || '';
+  const isExisting = data.is_existing;
+  const isPersonal = data.is_personal;
 
-  // Generate HTML
-  const html = templateEngine.generateSiteHTML(config);
+  console.log(`generateSiteWithClaude — name: "${businessName}", type: "${businessType}", existing: ${isExisting}`);
 
-  // Save site locally (always works)
+  // For existing businesses, have Claude research and fill in realistic details
+  let businessContext = '';
+  if (isExisting && !isPersonal) {
+    const researchResp = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 800,
+      system: 'You are a business researcher. Given a business name and type, generate realistic specific details for their website. Include: 4-5 specific services with typical price ranges, a compelling 2-sentence about section, trust signals (years in business, licenses, guarantees), and their likely service area. Be specific, not generic.',
+      messages: [{ role: 'user', content: `Business: "${businessName}", Type: "${businessType}"` }]
+    });
+    businessContext = researchResp.content[0].text;
+  }
+
+  const sitePrompt = isPersonal
+    ? `Build a personal website. Name: "${businessName}". Purpose: "${businessType}". Contact phone: ${phone}.`
+    : `Build a landing page for "${businessName}" — a ${businessType} business. Phone: ${phone}.${businessContext ? `\n\nResearched business details:\n${businessContext}` : ''}`;
+
+  const htmlResp = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 8000,
+    system: `You are an expert web designer building high-converting landing pages for local service businesses.
+
+RULES — follow exactly:
+- Return ONLY complete valid HTML. No markdown, no code fences, no explanation.
+- Mobile-first, fully responsive
+- Inline CSS only. One Google Font max. No JS frameworks. No external CSS.
+- Fast loading — no unnecessary assets
+- SEO: proper <title>, <meta description>, Open Graph tags, LocalBusiness JSON-LD schema
+- Design: dark hero (#1a1a2e or similar), white content sections, clean and professional
+- PRIMARY CTA: call or text the phone number. Use <a href="tel:..."> and <a href="sms:...">. Make it prominent.
+- NO email capture forms — real leads call or text
+- Phone number appears at minimum 3x: hero, services section, footer/contact
+- Sections: hero with headline + CTA buttons, services with prices, about, contact
+- Services: realistic items for this business type with approximate price ranges
+- Footer: "Built with Marco | textmarco.com"
+- Click-to-call button style: large, high-contrast, rounded`,
+    messages: [{ role: 'user', content: sitePrompt }]
+  });
+
+  // Strip markdown code fences if Claude includes them
+  const html = htmlResp.content[0].text.replace(/^```html\n?/i, '').replace(/\n?```$/i, '').trim();
+
+  const subdomain = generateSubdomain(businessName);
+
+  // Save locally
   const sitesDir = path.join(__dirname, 'sites');
   if (!fs.existsSync(sitesDir)) fs.mkdirSync(sitesDir, { recursive: true });
   fs.writeFileSync(path.join(sitesDir, `${subdomain}.html`), html);
 
-  // Save subdomain and HTML to database for active-mode editing
+  // Save to DB
   await pool.query(
     'UPDATE conversations SET site_subdomain = $1, site_html = $2 WHERE phone = $3',
     [subdomain, html, data.phone]
   );
 
-  // Try Cloudflare Pages if credentials exist
+  // Deploy to Cloudflare if available
   if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
-    const result = await deployer.deployWebsite(subdomain, html, config.businessName);
+    const result = await deployer.deployWebsite(subdomain, html, businessName);
     if (result.success && result.method !== 'simulation') {
       console.log(`Site deployed to Cloudflare: ${result.url}`);
       return result.url;
     }
   }
 
-  // Serve from Express
   const localUrl = `https://marco-clean.onrender.com/sites/${subdomain}`;
   console.log(`Site generated: ${localUrl}`);
   return localUrl;
+}
+
+async function buildAndSendSite(phone, marcoNumber) {
+  try {
+    const fullConvo = await pool.query('SELECT * FROM conversations WHERE phone = $1', [phone]);
+    const data = fullConvo.rows[0];
+    const siteUrl = await generateSiteWithClaude(data);
+
+    const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
+    const message = `here's your site: ${siteUrl}\n\n$9.99/mo to keep it live and keep editing: ${paymentLink}`;
+
+    await pool.query(
+      "UPDATE conversations SET expires_at = NOW() + INTERVAL '48 hours', site_url = $1, state = 'awaiting_payment' WHERE phone = $2",
+      [siteUrl, phone]
+    );
+    await pool.query('UPDATE customers SET status = $1, site_url = $2 WHERE phone = $3', ['building', siteUrl, phone]);
+    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [phone, 'outbound', message]);
+    await sendReply(phone, message, marcoNumber);
+
+    console.log(`Site built and sent to ${phone}: ${siteUrl}`);
+  } catch (err) {
+    console.error(`Build failed for ${phone}:`, err.message);
+    try {
+      await sendReply(phone, "something went sideways. give me a minute and text me back.", marcoNumber);
+    } catch (e) {}
+  }
 }
 
 // --- Routes ---
@@ -686,9 +806,8 @@ app.post('/admin/activate/:phone', async (req, res) => {
     // Send them the opening message so they don't have to text first
     const convo = await pool.query('SELECT sendblue_number FROM conversations WHERE phone = $1', [phone]);
     const marcoNumber = convo.rows[0]?.sendblue_number || '';
-    await sendReply(phone, "marco here. I build websites over text. what's your business called?", marcoNumber);
-    // Update state to ask_name since we already sent the greeting
-    await pool.query(`UPDATE conversations SET state = 'ask_name' WHERE phone = $1`, [phone]);
+    await sendReply(phone, "marco here. business site or personal site?", marcoNumber);
+    await pool.query(`UPDATE conversations SET state = 'ask_biz_or_personal' WHERE phone = $1`, [phone]);
     res.json({ success: true, message: `${phone} activated — opening message sent` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -797,6 +916,13 @@ app.post('/sms', async (req, res) => {
     await sendSMS(from, result.response, sendblueNumber || convo.sendblue_number);
 
     res.status(200).json({ success: true });
+
+    // Kick off async site build after responding (non-blocking)
+    if (result.triggerBuild) {
+      buildAndSendSite(from, sendblueNumber || convo.sendblue_number).catch(err =>
+        console.error('Async build error:', err.message)
+      );
+    }
   } catch (err) {
     console.error('Error:', err.response?.data || err.message || err);
     try {
@@ -840,6 +966,13 @@ app.post('/sms-twilio', async (req, res) => {
 
     // Twilio expects TwiML response — empty response since we're sending via API
     res.type('text/xml').send('<Response></Response>');
+
+    // Kick off async site build after responding (non-blocking)
+    if (result.triggerBuild) {
+      buildAndSendSite(from, twilioNumber).catch(err =>
+        console.error('Async build error (Twilio):', err.message)
+      );
+    }
   } catch (err) {
     console.error('Error (Twilio):', err.response?.data || err.message || err);
     try {
