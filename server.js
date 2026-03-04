@@ -391,95 +391,98 @@ async function processState(convo, message) {
     };
   }
 
-  // --- greeting ---
+  // --- greeting → kick off onboarding ---
   if (convo.state === 'greeting') {
     return {
       response: "marco here. business site or personal site?",
-      newState: 'ask_biz_or_personal',
+      newState: 'onboarding',
       extracted: null
     };
   }
 
-  // --- ask_biz_or_personal ---
-  if (convo.state === 'ask_biz_or_personal') {
-    const isPersonal = /personal|hobby|portfolio|myself|just me/i.test(message);
-    if (isPersonal) {
-      return {
-        response: "got it. what should we name your site?",
-        newState: 'ask_personal_name',
-        extracted: { is_personal: true }
-      };
+  // --- onboarding (Claude-driven, collects all 5 fields) ---
+  if (convo.state === 'onboarding') {
+    // Fetch conversation history
+    const msgResult = await pool.query(
+      'SELECT direction, body FROM messages WHERE phone = $1 ORDER BY created_at DESC LIMIT 20',
+      [convo.phone]
+    );
+    const history = msgResult.rows.reverse();
+    const messages = [];
+    for (const msg of history) {
+      const role = msg.direction === 'inbound' ? 'user' : 'assistant';
+      if (messages.length > 0 && messages[messages.length - 1].role === role) {
+        messages[messages.length - 1].content += '\n' + msg.body;
+      } else {
+        messages.push({ role, content: msg.body });
+      }
     }
-    return {
-      response: "nice. what's the business called?",
-      newState: 'ask_biz_name',
-      extracted: { is_personal: false }
-    };
+    if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+      messages.push({ role: 'user', content: message });
+    } else {
+      if (!messages[messages.length - 1].content.includes(message)) {
+        messages[messages.length - 1].content += '\n' + message;
+      }
+    }
+
+    const systemPrompt = `You are Marco, a grumpy but brilliant web designer who builds sites over text. Sharp, dry, competent. You have their back but you won't be cheerful about it.
+
+YOUR JOB: collect these 5 things to build their site:
+1. Business or personal site
+2. Business/site name
+3. Type of business (what they do)
+4. New business or already established
+5. Phone number for the site (what customers call/text)
+
+RULES:
+- Short responses. Under 160 chars when possible.
+- No asterisk actions, no "ugh", no sighs
+- Track what you've already collected from the conversation. Don't re-ask.
+- When they reveal the business TYPE — drop ONE sharp, specific industry insight that shows you know their world. Make it feel like you've seen a hundred of these businesses. Then immediately pivot back to collecting info. Keep it to one sentence. Example: "mobile car wash — guys doing routes in this market are leaving 40% on the table without online booking. new or established?"
+- If they meander or mess with you, handle it briefly with personality then steer back
+- If they give you something weird, extract what you can and move on
+- Once you have ALL 5 fields, output ONLY this on its own line then your message:
+<!-- BUILD_READY -->{"site_name":"NAME","site_type":"TYPE","is_personal":false,"is_existing":true,"contact_phone":"+1XXXXXXXXXX"}<!-- /BUILD_READY -->
+- contact_phone must be E.164 format (+1XXXXXXXXXX). If they give 10 digits, add +1.
+- Do NOT output BUILD_READY until all 5 fields are confirmed`;
+
+    const aiResponse = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 300,
+      system: systemPrompt,
+      messages
+    });
+
+    const fullResponse = aiResponse.content[0].text;
+
+    // Check if Claude has all the info and is ready to build
+    const buildMatch = fullResponse.match(/<!-- BUILD_READY -->([\s\S]*?)<!-- \/BUILD_READY -->/);
+    if (buildMatch) {
+      try {
+        const data = JSON.parse(buildMatch[1].trim());
+        const conversationalReply = fullResponse.replace(/<!-- BUILD_READY -->[\s\S]*?<!-- \/BUILD_READY -->/, '').trim()
+          || "on it. give me a couple minutes.";
+        return {
+          response: conversationalReply,
+          newState: 'building',
+          extracted: {
+            site_name: data.site_name,
+            site_type: data.site_type,
+            is_personal: data.is_personal || false,
+            is_existing: data.is_existing || false,
+            contact_phone: data.contact_phone
+          },
+          triggerBuild: true
+        };
+      } catch (e) {
+        console.error('Failed to parse BUILD_READY JSON:', e.message);
+      }
+    }
+
+    return { response: fullResponse, newState: 'onboarding', extracted: null };
   }
 
-  // --- ask_biz_name ---
-  if (convo.state === 'ask_biz_name') {
-    const name = await extractField(message, 'site_name');
-    return {
-      response: `${name}. what type of business?`,
-      newState: 'ask_biz_type',
-      extracted: { site_name: name }
-    };
-  }
-
-  // --- ask_biz_type ---
-  if (convo.state === 'ask_biz_type') {
-    const type = await extractField(message, 'site_type');
-    return {
-      response: "new business or already established?",
-      newState: 'ask_new_or_existing',
-      extracted: { site_type: type }
-    };
-  }
-
-  // --- ask_new_or_existing ---
-  if (convo.state === 'ask_new_or_existing') {
-    const isExisting = /existing|established|years|already|open|running|operating|been around/i.test(message);
-    return {
-      response: "what number should go on the site? customers will call and text this number.",
-      newState: 'ask_phone',
-      extracted: { is_existing: isExisting }
-    };
-  }
-
-  // --- ask_personal_name ---
-  if (convo.state === 'ask_personal_name') {
-    const name = await extractField(message, 'site_name');
-    return {
-      response: `${name}. what's it for — portfolio, hobby, project?`,
-      newState: 'ask_personal_purpose',
-      extracted: { site_name: name }
-    };
-  }
-
-  // --- ask_personal_purpose ---
-  if (convo.state === 'ask_personal_purpose') {
-    const type = await extractField(message, 'site_type');
-    return {
-      response: "what number should go on the site?",
-      newState: 'ask_phone',
-      extracted: { site_type: type }
-    };
-  }
-
-  // --- ask_phone ---
-  if (convo.state === 'ask_phone') {
-    const rawPhone = await extractField(message, 'contact_phone');
-    const contactPhone = rawPhone.startsWith('+') ? rawPhone : `+1${rawPhone.replace(/\D/g, '')}`;
-    return {
-      response: "on it. give me a couple minutes.",
-      newState: 'building',
-      extracted: { contact_phone: contactPhone },
-      triggerBuild: true
-    };
-  }
-
-  // --- building (in case they text while site is being generated) ---
+  // --- building (in case they text while site is generating) ---
   if (convo.state === 'building') {
     return {
       response: "still building. almost there.",
@@ -491,8 +494,10 @@ async function processState(convo, message) {
   // --- awaiting_payment ---
   if (convo.state === 'awaiting_payment') {
     const msg = message.trim().toLowerCase();
+    const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
+    const siteUrl = convo.site_url || null;
 
-    // They already know the password
+    // Secret password
     if (msg === 'chowder') {
       await pool.query(
         `UPDATE conversations SET state = 'active', paid_at = NOW(), expires_at = NULL WHERE phone = $1`,
@@ -509,7 +514,7 @@ async function processState(convo, message) {
       };
     }
 
-    // They mention Josh or a free deal — start the password game
+    // Josh referral — password game
     if (/josh|free|hook.?up|password|deal|told me|said i|gave me|free month|free trial/i.test(message)) {
       return {
         response: "josh huh? prove it. what's the secret password?",
@@ -518,10 +523,61 @@ async function processState(convo, message) {
       };
     }
 
-    // Normal response — payment nag
-    const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
+    // They want to see the site / resend link
+    if (/link|site|url|see it|look at|view|show me|send it|where is|can i see/i.test(message)) {
+      return {
+        response: siteUrl ? `here it is: ${siteUrl}\n\n$9.99/mo to keep it and start editing: ${paymentLink}` : `still building your site. hang tight.`,
+        newState: 'awaiting_payment',
+        extracted: null
+      };
+    }
+
+    // They want to edit before paying
+    if (/change|edit|update|fix|different|color|font|add|remove|move/i.test(message)) {
+      return {
+        response: `you can look at it all day. editing unlocks when you pay. $9.99: ${paymentLink}`,
+        newState: 'awaiting_payment',
+        extracted: null
+      };
+    }
+
+    // General conversation — Marco is helpful but steers toward payment
+    const msgResult = await pool.query(
+      'SELECT direction, body FROM messages WHERE phone = $1 ORDER BY created_at DESC LIMIT 10',
+      [convo.phone]
+    );
+    const history = msgResult.rows.reverse();
+    const messages = [];
+    for (const msg2 of history) {
+      const role = msg2.direction === 'inbound' ? 'user' : 'assistant';
+      if (messages.length > 0 && messages[messages.length - 1].role === role) {
+        messages[messages.length - 1].content += '\n' + msg2.body;
+      } else {
+        messages.push({ role, content: msg2.body });
+      }
+    }
+    if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+      messages.push({ role: 'user', content: message });
+    } else {
+      if (!messages[messages.length - 1].content.includes(message)) {
+        messages[messages.length - 1].content += '\n' + message;
+      }
+    }
+
+    const aiResponse = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 200,
+      system: `You are Marco, a grumpy but brilliant web designer. The user has a site built and ready at ${siteUrl || 'their URL'}. They haven't paid yet ($9.99/mo). They can view the site freely. Editing is locked until payment.
+- Be helpful and conversational but always steer toward payment naturally
+- Resend the site link freely if they ask
+- If they ask to edit, remind them editing unlocks with payment: ${paymentLink}
+- Short responses under 160 chars
+- No asterisk actions`,
+      messages
+    });
+
     return {
-      response: `still waiting on that payment. $9.99: ${paymentLink}`,
+      response: aiResponse.content[0].text,
       newState: 'awaiting_payment',
       extracted: null
     };
@@ -557,16 +613,16 @@ async function processState(convo, message) {
   if (convo.state === 'expired') {
     return {
       response: "marco here. business site or personal site?",
-      newState: 'ask_biz_or_personal',
+      newState: 'onboarding',
       extracted: null
     };
   }
 
   // --- unknown state fallback ---
-  console.log(`Unknown state "${convo.state}" for ${convo.phone}, resetting to greeting flow`);
+  console.log(`Unknown state "${convo.state}" for ${convo.phone}, resetting to onboarding`);
   return {
     response: "marco here. business site or personal site?",
-    newState: 'ask_biz_or_personal',
+    newState: 'onboarding',
     extracted: null
   };
 }
@@ -787,7 +843,7 @@ app.post('/admin/reset/:phone', async (req, res) => {
   const phone = '+' + req.params.phone;
   try {
     await pool.query(
-      `UPDATE conversations SET state = 'greeting', site_name = NULL, site_type = NULL, site_url = NULL, site_html = NULL, site_subdomain = NULL, paid_at = NULL, expires_at = NULL WHERE phone = $1`,
+      `UPDATE conversations SET state = 'greeting', site_name = NULL, site_type = NULL, site_url = NULL, site_html = NULL, site_subdomain = NULL, paid_at = NULL, expires_at = NULL, contact_phone = NULL, is_personal = FALSE, is_existing = FALSE WHERE phone = $1`,
       [phone]
     );
     await pool.query('DELETE FROM messages WHERE phone = $1', [phone]);
