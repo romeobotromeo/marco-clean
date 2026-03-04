@@ -394,7 +394,7 @@ async function processState(convo, message) {
   // --- greeting → kick off onboarding ---
   if (convo.state === 'greeting') {
     return {
-      response: "marco here. business site or personal site?",
+      response: "hey it's Marco. are you ready to take the internet by storm? let's build you a site. business or personal?",
       newState: 'onboarding',
       extracted: null
     };
@@ -869,8 +869,8 @@ app.post('/admin/activate/:phone', async (req, res) => {
     // Send them the opening message so they don't have to text first
     const convo = await pool.query('SELECT sendblue_number FROM conversations WHERE phone = $1', [phone]);
     const marcoNumber = convo.rows[0]?.sendblue_number || '';
-    await sendReply(phone, "marco here. business site or personal site?", marcoNumber);
-    await pool.query(`UPDATE conversations SET state = 'ask_biz_or_personal' WHERE phone = $1`, [phone]);
+    await sendReply(phone, "hey it's Marco. are you ready to take the internet by storm? let's build you a site. business or personal?", marcoNumber);
+    await pool.query(`UPDATE conversations SET state = 'onboarding' WHERE phone = $1`, [phone]);
     res.json({ success: true, message: `${phone} activated — opening message sent` });
   } catch (err) {
     res.status(500).json({ error: err.message });
