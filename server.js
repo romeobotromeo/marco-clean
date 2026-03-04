@@ -627,13 +627,20 @@ RULES:
   };
 }
 
-function generateSubdomain(name) {
-  return (name || 'site').toLowerCase()
+async function generateSubdomain(name) {
+  const base = (name || 'site').toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
-    .slice(0, 28) + '-' + Math.random().toString(36).slice(2, 6);
+    .slice(0, 35);
+
+  // Try clean name first
+  const existing = await pool.query('SELECT phone FROM conversations WHERE site_subdomain = $1', [base]);
+  if (existing.rows.length === 0) return base;
+
+  // Collision — append last 4 of a random string
+  return base.slice(0, 30) + '-' + Math.random().toString(36).slice(2, 6);
 }
 
 async function generateSiteWithClaude(data) {
@@ -686,7 +693,7 @@ RULES — follow exactly:
   // Strip markdown code fences if Claude includes them
   const html = htmlResp.content[0].text.replace(/^```html\n?/i, '').replace(/\n?```$/i, '').trim();
 
-  const subdomain = generateSubdomain(businessName);
+  const subdomain = await generateSubdomain(businessName);
 
   // Save locally
   const sitesDir = path.join(__dirname, 'sites');
@@ -720,7 +727,7 @@ async function buildAndSendSite(phone, marcoNumber) {
     const siteUrl = await generateSiteWithClaude(data);
 
     const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
-    const message = `here's your site: ${siteUrl}\n\n$9.99/mo to keep it live and keep editing: ${paymentLink}`;
+    const message = `here's your site: ${siteUrl}\n\ngive it 2-3 min to load the first time.\n\n$9.99/mo to keep it and start editing: ${paymentLink}`;
 
     await pool.query(
       "UPDATE conversations SET expires_at = NOW() + INTERVAL '48 hours', site_url = $1, state = 'awaiting_payment' WHERE phone = $2",
