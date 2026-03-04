@@ -142,7 +142,7 @@ async function extractField(message, field) {
   };
 
   const resp = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5',
     max_tokens: 50,
     system: 'You extract specific data from conversational text. Return ONLY the requested value. No explanation, no quotes, no extra text.',
     messages: [{ role: 'user', content: prompts[field] || `Extract the ${field} from: "${message}"` }]
@@ -350,7 +350,7 @@ async function processState(convo, message) {
     // 4. Call Claude with site-aware system prompt
     const systemPrompt = buildActiveSystemPrompt(siteData, convo.contact_phone);
     const aiResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 4096,
       system: systemPrompt,
       messages
@@ -447,17 +447,19 @@ RULES:
 - Do NOT output BUILD_READY until all 5 fields are confirmed`;
 
     const aiResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 300,
+      model: 'claude-sonnet-4-5',
+      max_tokens: 600,
       system: systemPrompt,
       messages
     });
 
     const fullResponse = aiResponse.content[0].text;
+    console.log(`Onboarding Claude response for ${convo.phone}: ${fullResponse.substring(0, 200)}`);
 
     // Check if Claude has all the info and is ready to build
     const buildMatch = fullResponse.match(/<!-- BUILD_READY -->([\s\S]*?)<!-- \/BUILD_READY -->/);
     if (buildMatch) {
+      console.log(`BUILD_READY triggered for ${convo.phone}: ${buildMatch[1].trim()}`);
       try {
         const data = JSON.parse(buildMatch[1].trim());
         const conversationalReply = fullResponse.replace(/<!-- BUILD_READY -->[\s\S]*?<!-- \/BUILD_READY -->/, '').trim()
@@ -475,7 +477,7 @@ RULES:
           triggerBuild: true
         };
       } catch (e) {
-        console.error('Failed to parse BUILD_READY JSON:', e.message);
+        console.error('Failed to parse BUILD_READY JSON:', e.message, 'Raw:', buildMatch[1].trim());
       }
     }
 
@@ -565,7 +567,7 @@ RULES:
     }
 
     const aiResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 200,
       system: `You are Marco, a grumpy but brilliant web designer. The user has a site built and ready at ${siteUrl || 'their URL'}. They haven't paid yet ($9.99/mo). They can view the site freely. Editing is locked until payment.
 - Be helpful and conversational but always steer toward payment naturally
@@ -656,7 +658,7 @@ async function generateSiteWithClaude(data) {
   let businessContext = '';
   if (isExisting && !isPersonal) {
     const researchResp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 800,
       system: 'You are a business researcher. Given a business name and type, generate realistic specific details for their website. Include: 4-5 specific services with typical price ranges, a compelling 2-sentence about section, trust signals (years in business, licenses, guarantees), and their likely service area. Be specific, not generic.',
       messages: [{ role: 'user', content: `Business: "${businessName}", Type: "${businessType}"` }]
@@ -668,8 +670,9 @@ async function generateSiteWithClaude(data) {
     ? `Build a personal website. Name: "${businessName}". Purpose: "${businessType}". Contact phone: ${phone}.`
     : `Build a landing page for "${businessName}" — a ${businessType} business. Phone: ${phone}.${businessContext ? `\n\nResearched business details:\n${businessContext}` : ''}`;
 
+  console.log(`Generating site HTML for ${data.phone} — ${businessName} (${businessType})`);
   const htmlResp = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5',
     max_tokens: 8000,
     system: `You are an expert web designer building high-converting landing pages for local service businesses.
 
@@ -721,9 +724,11 @@ RULES — follow exactly:
 }
 
 async function buildAndSendSite(phone, marcoNumber) {
+  console.log(`buildAndSendSite starting for ${phone}`);
   try {
     const fullConvo = await pool.query('SELECT * FROM conversations WHERE phone = $1', [phone]);
     const data = fullConvo.rows[0];
+    console.log(`buildAndSendSite data: name="${data.site_name}" type="${data.site_type}" existing=${data.is_existing}`);
     const siteUrl = await generateSiteWithClaude(data);
 
     const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
@@ -840,6 +845,21 @@ app.post('/admin/bypass/:phone', async (req, res) => {
     const marcoNumber = convo.rows[0]?.sendblue_number || '';
     await sendReply(phone, "you're in. site is live. what do you want to change?", marcoNumber);
     res.json({ success: true, message: `${phone} bypassed — now active` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin debug — check conversation state
+app.get('/admin/debug/:phone', async (req, res) => {
+  const phone = '+' + req.params.phone;
+  try {
+    const convo = await pool.query('SELECT * FROM conversations WHERE phone = $1', [phone]);
+    const msgs = await pool.query('SELECT direction, body, created_at FROM messages WHERE phone = $1 ORDER BY created_at DESC LIMIT 10', [phone]);
+    res.json({
+      conversation: convo.rows[0] || null,
+      last10messages: msgs.rows
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

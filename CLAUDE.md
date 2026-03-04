@@ -65,7 +65,7 @@
 ## Notes
 - "chowder" is the secret password (Josh referral Easter egg) — skips payment, gives 30 days free
 - Sites stored 3 ways: DB (site_html), disk (sites/*.html), Cloudflare Pages
-- Claude model in use: claude-sonnet-4-20250514
+- Claude model in use: claude-sonnet-4-5 (updated from deprecated claude-sonnet-4-20250514)
 
 ## Admin endpoints
 - POST /admin/activate/:phone — move from waitlist to greeting, sends opening message
@@ -73,3 +73,4 @@
 - POST /admin/reset/:phone — reset to greeting for testing
 - POST /admin/deploy/:phone — manually deploy site to Cloudflare and text user
 - GET  /admin/cloudflare-test — test Cloudflare connection
+- GET  /admin/debug/:phone — check conversation state + last 10 messages (debugging)
