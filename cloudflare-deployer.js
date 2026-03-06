@@ -151,22 +151,56 @@ class CloudflareDeployer {
     return resp.data.result;
   }
 
+  async getZoneId() {
+    if (this._zoneId) return this._zoneId;
+    const resp = await axios.get(
+      'https://api.cloudflare.com/client/v4/zones?name=textmarco.com',
+      { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
+    );
+    this._zoneId = resp.data.result[0]?.id;
+    return this._zoneId;
+  }
+
   async addCustomDomain(subdomain) {
     const domain = `${subdomain}.textmarco.com`;
+
+    // Step A: Add domain to Pages project
     try {
       await axios.post(
         `${this.baseUrl}/pages/projects/${subdomain}/domains`,
         { name: domain },
         { headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Content-Type': 'application/json' } }
       );
-      console.log(`Custom domain added: ${domain}`);
+      console.log(`Custom domain added to Pages project: ${domain}`);
     } catch (error) {
-      // 409 = domain already exists on this project — that's fine
       if (error.response?.status === 409) {
-        console.log(`Custom domain already set: ${domain}`);
+        console.log(`Custom domain already on Pages project: ${domain}`);
       } else {
-        console.error(`Failed to add custom domain ${domain}:`, error.response?.data || error.message);
-        // Don't throw — deployment succeeded, domain issue is secondary
+        console.error(`Failed to add domain to Pages project:`, error.response?.data || error.message);
+      }
+    }
+
+    // Step B: Create CNAME DNS record in textmarco.com zone
+    try {
+      const zoneId = await this.getZoneId();
+      if (!zoneId) { console.error('Could not find textmarco.com zone'); return; }
+
+      await axios.post(
+        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
+        {
+          type: 'CNAME',
+          name: subdomain,
+          content: `${subdomain}.pages.dev`,
+          proxied: true
+        },
+        { headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Content-Type': 'application/json' } }
+      );
+      console.log(`DNS CNAME created: ${domain} → ${subdomain}.pages.dev`);
+    } catch (error) {
+      if (error.response?.status === 400 && JSON.stringify(error.response?.data).includes('already exists')) {
+        console.log(`DNS record already exists: ${domain}`);
+      } else {
+        console.error(`Failed to create DNS record:`, error.response?.data || error.message);
       }
     }
   }
