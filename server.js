@@ -391,6 +391,15 @@ async function processState(convo, message) {
     };
   }
 
+  // --- waitlist — hold them until manually activated ---
+  if (convo.state === 'waitlist') {
+    return {
+      response: "hey! you've reached Marco. we're in early access right now — you're on the list and we'll reach out when it's your turn.",
+      newState: 'waitlist',
+      extracted: null
+    };
+  }
+
   // --- greeting → kick off onboarding ---
   if (convo.state === 'greeting') {
     return {
