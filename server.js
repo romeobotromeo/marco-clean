@@ -865,6 +865,19 @@ app.post('/admin/bypass/:phone', async (req, res) => {
   }
 });
 
+// Admin delete — remove a user entirely
+app.post('/admin/delete/:phone', async (req, res) => {
+  const phone = '+' + req.params.phone;
+  try {
+    await pool.query('DELETE FROM messages WHERE phone = $1', [phone]);
+    await pool.query('DELETE FROM conversations WHERE phone = $1', [phone]);
+    await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
+    res.json({ success: true, message: `${phone} deleted` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin debug — check conversation state
 app.get('/admin/debug/:phone', async (req, res) => {
   const phone = '+' + req.params.phone;
