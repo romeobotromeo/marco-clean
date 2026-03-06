@@ -43,6 +43,9 @@ class CloudflareDeployer {
       // Step 4: Create deployment with manifest
       const deployment = await this.createDeployment(subdomain, fileHash);
 
+      // Step 5: Add custom domain (idempotent — safe to call multiple times)
+      await this.addCustomDomain(subdomain);
+
       const url = `https://${subdomain}.textmarco.com`;
       console.log(`Deployment successful: ${url}`);
 
@@ -146,6 +149,26 @@ class CloudflareDeployer {
 
     console.log(`Deployment created: ${resp.data.result.id}`);
     return resp.data.result;
+  }
+
+  async addCustomDomain(subdomain) {
+    const domain = `${subdomain}.textmarco.com`;
+    try {
+      await axios.post(
+        `${this.baseUrl}/pages/projects/${subdomain}/domains`,
+        { name: domain },
+        { headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Content-Type': 'application/json' } }
+      );
+      console.log(`Custom domain added: ${domain}`);
+    } catch (error) {
+      // 409 = domain already exists on this project — that's fine
+      if (error.response?.status === 409) {
+        console.log(`Custom domain already set: ${domain}`);
+      } else {
+        console.error(`Failed to add custom domain ${domain}:`, error.response?.data || error.message);
+        // Don't throw — deployment succeeded, domain issue is secondary
+      }
+    }
   }
 
   async simulateDeployment(subdomain, htmlContent) {

@@ -787,6 +787,21 @@ app.get('/admin/cloudflare-test', async (req, res) => {
   res.json(info);
 });
 
+// Admin fix-domains — retroactively add custom domains to all deployed Cloudflare projects
+app.post('/admin/fix-domains', async (req, res) => {
+  try {
+    const projects = await deployer.listProjects();
+    const results = [];
+    for (const project of projects) {
+      await deployer.addCustomDomain(project.name);
+      results.push(project.name);
+    }
+    res.json({ success: true, fixed: results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin deploy — manually deploy a site to Cloudflare and text the user
 app.post('/admin/deploy/:phone', async (req, res) => {
   const phone = '+' + req.params.phone;
