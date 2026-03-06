@@ -986,6 +986,12 @@ app.post('/sms', async (req, res) => {
   // Ignore outbound echoes
   if (req.body.is_outbound) return res.status(200).json({ ok: true });
 
+  // Ignore MMS with no text (photos only) — respond once and stop
+  if (!body.trim() && req.body.media_url) {
+    console.log(`MMS photo from ${from} — no text, ignoring`);
+    return res.status(200).json({ ok: true });
+  }
+
   console.log(`SMS from ${from}: ${body}`);
 
   try {
@@ -1023,12 +1029,12 @@ app.post('/sms', async (req, res) => {
     }
   } catch (err) {
     console.error('Error:', err.response?.data || err.message || err);
+    res.status(200).json({ ok: true }); // Always 200 so SendBlue doesn't retry
     try {
       await sendSMS(from, "Marco here. Give me a sec, something's weird on my end.", sendblueNumber);
     } catch (sendErr) {
       console.error('Failed to send error reply:', sendErr.response?.data || sendErr.message);
     }
-    res.status(500).json({ success: false, error: err.message });
   }
 });
 
