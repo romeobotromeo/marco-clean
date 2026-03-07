@@ -4,6 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const cron = require('node-cron');
 const TemplateEngine = require('./template-engine');
 const CloudflareDeployer = require('./cloudflare-deployer');
 
@@ -1193,3 +1194,41 @@ app.post('/cleanup-expired', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Marco running on port ${PORT}`));
+
+// Run cleanup daily at 3am UTC
+cron.schedule('0 3 * * *', async () => {
+  console.log('Running daily cleanup...');
+  try {
+    const unpaid = await pool.query(
+      `SELECT phone, site_url, sendblue_number FROM conversations
+       WHERE state = 'awaiting_payment' AND expires_at < NOW()`
+    );
+    for (const row of unpaid.rows) {
+      console.log(`Expiring site for ${row.phone}`);
+      await pool.query(
+        `UPDATE conversations SET state = 'expired', cloudflare_delete_at = NOW() + INTERVAL '14 days' WHERE phone = $1`,
+        [row.phone]
+      );
+      await pool.query(`UPDATE customers SET status = 'expired' WHERE phone = $1`, [row.phone]);
+      try {
+        await sendReply(row.phone, "your draft site expired. text me anytime if you want to start fresh.", row.sendblue_number);
+      } catch (e) {}
+    }
+
+    const toDelete = await pool.query(
+      `SELECT phone, site_subdomain FROM conversations
+       WHERE state = 'expired' AND cloudflare_delete_at < NOW() AND site_deleted = FALSE AND site_subdomain IS NOT NULL`
+    );
+    for (const row of toDelete.rows) {
+      console.log(`Deleting Cloudflare site for ${row.phone}: ${row.site_subdomain}`);
+      await deployer.deleteProject(row.site_subdomain);
+      await pool.query(
+        `UPDATE conversations SET site_deleted = TRUE, site_html = NULL WHERE phone = $1`,
+        [row.phone]
+      );
+    }
+    console.log(`Cleanup done: ${unpaid.rows.length} expired, ${toDelete.rows.length} deleted from Cloudflare`);
+  } catch (err) {
+    console.error('Cron cleanup error:', err.message);
+  }
+});
