@@ -1022,10 +1022,11 @@ app.post('/sms', async (req, res) => {
     // Log inbound message
     await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body]);
 
-    // Get or create conversation, store sendblue number
+    // Get or create conversation, always update to most recent sendblue number used
     const convo = await getOrCreateConversation(from);
-    if (sendblueNumber && !convo.sendblue_number) {
+    if (sendblueNumber && sendblueNumber !== convo.sendblue_number) {
       await pool.query('UPDATE conversations SET sendblue_number = $1 WHERE phone = $2', [sendblueNumber, from]);
+      convo.sendblue_number = sendblueNumber;
     }
 
     // Register in SendBlue contacts (safe to call every time — update_if_exists handles duplicates)
