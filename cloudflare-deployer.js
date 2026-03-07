@@ -227,11 +227,36 @@ class CloudflareDeployer {
 
   async deleteProject(projectName) {
     if (this.simulateMode) return { success: true };
-    await axios.delete(
-      `${this.baseUrl}/pages/projects/${projectName}`,
-      { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
-    );
-    console.log(`Deleted project: ${projectName}`);
+    try {
+      await axios.delete(
+        `${this.baseUrl}/pages/projects/${projectName}`,
+        { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
+      );
+      console.log(`Deleted Pages project: ${projectName}`);
+    } catch (err) {
+      console.error(`Failed to delete Pages project ${projectName}:`, err.response?.data || err.message);
+    }
+
+    // Also delete the DNS CNAME record
+    try {
+      const zoneId = await this.getZoneId();
+      if (!zoneId) return { success: true };
+      const domain = `${projectName}.textmarco.com`;
+      const records = await axios.get(
+        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?name=${domain}`,
+        { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
+      );
+      for (const record of records.data.result || []) {
+        await axios.delete(
+          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${record.id}`,
+          { headers: { 'Authorization': `Bearer ${this.apiToken}` } }
+        );
+        console.log(`Deleted DNS record: ${domain}`);
+      }
+    } catch (err) {
+      console.error(`Failed to delete DNS record for ${projectName}:`, err.response?.data || err.message);
+    }
+
     return { success: true };
   }
 }

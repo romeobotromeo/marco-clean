@@ -1151,21 +1151,18 @@ app.post('/send-reminders', async (req, res) => {
 // --- Cleanup expired sites (called by cron) ---
 app.post('/cleanup-expired', async (req, res) => {
   try {
-    const expired = await pool.query(
+    // Phase 1: 48hrs no payment → mark expired, schedule Cloudflare deletion in 14 days
+    const unpaid = await pool.query(
       `SELECT phone, site_url, sendblue_number FROM conversations
-       WHERE state = 'awaiting_payment' AND expires_at < NOW() AND site_deleted = FALSE`
+       WHERE state = 'awaiting_payment' AND expires_at < NOW()`
     );
-
-    for (const row of expired.rows) {
-      console.log(`Expiring site for ${row.phone}: ${row.site_url}`);
+    for (const row of unpaid.rows) {
+      console.log(`Expiring site for ${row.phone}`);
       await pool.query(
-        `UPDATE conversations SET state = 'expired', site_deleted = TRUE WHERE phone = $1`,
+        `UPDATE conversations SET state = 'expired', cloudflare_delete_at = NOW() + INTERVAL '14 days' WHERE phone = $1`,
         [row.phone]
       );
-      await pool.query(
-        `UPDATE customers SET status = 'expired' WHERE phone = $1`,
-        [row.phone]
-      );
+      await pool.query(`UPDATE customers SET status = 'expired' WHERE phone = $1`, [row.phone]);
       try {
         await sendReply(row.phone, "your draft site expired. text me anytime if you want to start fresh.", row.sendblue_number);
       } catch (err) {
@@ -1173,7 +1170,21 @@ app.post('/cleanup-expired', async (req, res) => {
       }
     }
 
-    res.json({ cleaned: expired.rows.length });
+    // Phase 2: 14 days past expiry → actually delete from Cloudflare
+    const toDelete = await pool.query(
+      `SELECT phone, site_subdomain FROM conversations
+       WHERE state = 'expired' AND cloudflare_delete_at < NOW() AND site_deleted = FALSE AND site_subdomain IS NOT NULL`
+    );
+    for (const row of toDelete.rows) {
+      console.log(`Deleting Cloudflare site for ${row.phone}: ${row.site_subdomain}`);
+      await deployer.deleteProject(row.site_subdomain);
+      await pool.query(
+        `UPDATE conversations SET site_deleted = TRUE, site_html = NULL WHERE phone = $1`,
+        [row.phone]
+      );
+    }
+
+    res.json({ expired: unpaid.rows.length, deleted: toDelete.rows.length });
   } catch (err) {
     console.error('Cleanup error:', err);
     res.status(500).json({ error: err.message });
