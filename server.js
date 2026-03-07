@@ -352,7 +352,7 @@ async function processState(convo, message) {
     const systemPrompt = buildActiveSystemPrompt(siteData, convo.contact_phone);
     const aiResponse = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemPrompt,
       messages
     });
@@ -379,17 +379,18 @@ async function processState(convo, message) {
       };
     }
 
+    // 6b. Truncated response — HTML start marker present but END missing (max_tokens hit)
+    if (fullResponse.includes('<!-- MARCO_HTML_START -->')) {
+      console.error(`HTML response truncated for ${convo.phone} — END marker missing`);
+      return {
+        response: "something cut off on my end. say that again and i'll redo it.",
+        newState: 'active',
+        extracted: null
+      };
+    }
+
     // 7. No HTML edit — return conversational response as-is
     return { response: fullResponse, newState: 'active', extracted: null };
-  }
-
-  // --- waitlist ---
-  if (convo.state === 'waitlist') {
-    return {
-      response: "you're on the list. marco will be right with you — your dream site is just a few texts away.",
-      newState: 'waitlist',
-      extracted: null
-    };
   }
 
   // --- waitlist — hold them until manually activated ---
