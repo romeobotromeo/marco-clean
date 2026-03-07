@@ -208,12 +208,13 @@ Rules:
 - You want to help them nail their business
 
 PREMIUM CUSTOM BUILDS:
-When someone asks for something beyond a clean single-page site — online stores, e-commerce, booking/scheduling systems, member portals, dashboards, login areas, multi-page sites, or anything that requires backend functionality — handle it like this:
+When someone asks for something beyond a clean single-page site — online stores, e-commerce, booking/scheduling systems, member portals, dashboards, login areas, multi-page sites, press releases, or anything that requires backend functionality — handle it like this:
 1. FIRST push back. You do simple, clean sites over text. "look, that's not really a text-message kind of build."
 2. If they persist or clearly need it, drop the tone slightly and let them in on something: "actually... there's something else we do. custom builds. $49/mo. not for everyone. but if you're serious, I can get you in."
 3. Make it feel exclusive — like you're letting them into a back room. Don't oversell. Be reluctant, then generous.
 4. Do NOT mention custom builds unless they ask for something that genuinely requires it. Simple edits, color changes, text updates, image swaps — those are normal and you handle them.
-5. If they say yes to custom, tell them "I'll have josh reach out to you personally." and leave it there.`;
+5. If they say yes to custom builds OR ask for something special (press release, SEO campaign, social media, logo, branding, photography), tell them "I'll have josh reach out to you personally." and on a NEW line output EXACTLY: <!-- SPECIAL_REQUEST: their request in a few words -->
+6. Only output the SPECIAL_REQUEST marker once per conversation topic.`;
 
   if (!contactPhone) {
     basePersonality += `\n\nIMPORTANT: You don't have a phone number for their site yet. At a natural point in conversation, ask what number they want displayed on their site. Keep it casual — don't force it.`;
@@ -389,8 +390,27 @@ async function processState(convo, message) {
       };
     }
 
-    // 7. No HTML edit — return conversational response as-is
-    return { response: fullResponse, newState: 'active', extracted: null };
+    // 7. Check for special request marker
+    const specialMatch = fullResponse.match(/<!-- SPECIAL_REQUEST: (.+?) -->/);
+    if (specialMatch) {
+      const requestDetails = specialMatch[1].trim();
+      console.log(`Special request from ${convo.phone}: ${requestDetails}`);
+      // Log to DB
+      pool.query(
+        'INSERT INTO special_requests (phone, details) VALUES ($1, $2)',
+        [convo.phone, requestDetails]
+      ).catch(err => console.error('Failed to log special request:', err.message));
+      // Text admin
+      const adminPhone = process.env.ADMIN_PHONE;
+      if (adminPhone) {
+        sendReply(adminPhone, `SPECIAL REQUEST\n${convo.phone} — ${convo.site_name || 'unknown'}\n"${requestDetails}"`, MARCO_NUMBERS.primary)
+          .catch(() => {});
+      }
+    }
+
+    // Strip marker from response before sending
+    const cleanResponse = fullResponse.replace(/<!-- SPECIAL_REQUEST: .+? -->/, '').trim();
+    return { response: cleanResponse, newState: 'active', extracted: null };
   }
 
   // --- waitlist — hold them until manually activated ---
@@ -981,14 +1001,119 @@ app.post('/waitlist', async (req, res) => {
 
 app.get('/dashboard', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM customers ORDER BY created_at DESC');
-    const customers = result.rows;
-    const convos = await pool.query('SELECT * FROM conversations ORDER BY updated_at DESC');
-    const html = `<!DOCTYPE html><html><head><title>Marco Dashboard</title><style>body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#fff;padding:40px}h1{color:#00ff88}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{padding:12px;text-align:left;border-bottom:1px solid #333}th{color:#00ff88}.status{padding:4px 12px;border-radius:20px;font-size:12px}.new{background:#333}.building{background:#f59e0b;color:#000}.launched{background:#00ff88;color:#000}.waitlist{background:#555}.count{display:inline-block;margin-right:20px;padding:20px;background:#1a1a1a;border-radius:8px}.count-num{font-size:36px;color:#00ff88}.count-label{font-size:14px;color:#888}h2{color:#00ff88;margin-top:40px}.state{color:#f59e0b}</style></head><body><h1>Marco Dashboard</h1><div><div class="count"><div class="count-num">${customers.filter(c=>c.status==='new').length}</div><div class="count-label">New</div></div><div class="count"><div class="count-num">${customers.filter(c=>c.status==='building').length}</div><div class="count-label">Building</div></div><div class="count"><div class="count-num">${customers.filter(c=>c.status==='launched').length}</div><div class="count-label">Launched</div></div></div><h2>Customers</h2><table><tr><th>Phone</th><th>Business</th><th>Status</th><th>Site URL</th><th>Signed Up</th></tr>${customers.map(c=>`<tr><td>${c.phone}</td><td>${c.business_name||'-'}</td><td><span class="status ${c.status}">${c.status}</span></td><td>${c.site_url?`<a href="${c.site_url}" style="color:#00ff88">${c.site_url}</a>`:'-'}</td><td>${new Date(c.created_at).toLocaleDateString()}</td></tr>`).join('')}</table><h2>Conversations</h2><table><tr><th>Phone</th><th>State</th><th>Site Name</th><th>Type</th><th>Updated</th></tr>${convos.rows.map(c=>`<tr><td>${c.phone}</td><td><span class="state">${c.state}</span></td><td>${c.site_name||'-'}</td><td>${c.site_type||'-'}</td><td>${new Date(c.updated_at).toLocaleString()}</td></tr>`).join('')}</table></body></html>`;
+    const customers = (await pool.query('SELECT * FROM customers ORDER BY created_at DESC')).rows;
+    const convos = (await pool.query('SELECT * FROM conversations ORDER BY updated_at DESC')).rows;
+    const waitlist = convos.filter(c => c.state === 'waitlist');
+    const specialReqs = (await pool.query('SELECT sr.*, c.site_name FROM special_requests sr LEFT JOIN conversations c ON sr.phone = c.phone ORDER BY sr.created_at DESC LIMIT 50')).rows;
+    const newReqCount = specialReqs.filter(r => r.status === 'new').length;
+
+    const html = `<!DOCTYPE html><html><head><title>Marco Dashboard</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#fff;padding:20px;margin:0}
+h1{color:#00ff88;font-size:1.8rem}h2{color:#00ff88;margin-top:30px;font-size:1.2rem}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+th,td{padding:10px 8px;text-align:left;border-bottom:1px solid #222}th{color:#00ff88}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.new{background:#333}.building{background:#f59e0b;color:#000}.launched{background:#00ff88;color:#000}.waitlist{background:#555}.active{background:#00ff88;color:#000}.expired{background:#444}
+.count{display:inline-block;margin:0 10px 10px 0;padding:15px 20px;background:#1a1a1a;border-radius:8px;min-width:80px}
+.count-num{font-size:2rem;color:#00ff88;font-weight:700}.count-label{font-size:12px;color:#888}
+.state{color:#f59e0b;font-size:12px}
+.alert{background:#ff4444;color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.btn{display:inline-block;padding:6px 14px;background:#00ff88;color:#000;border-radius:6px;text-decoration:none;font-size:12px;font-weight:700;border:none;cursor:pointer}
+.btn-sm{padding:4px 10px;font-size:11px}
+a{color:#00ff88}
+</style></head><body>
+<h1>Marco Dashboard ${newReqCount > 0 ? `<span class="alert">⚡ ${newReqCount} NEW REQUEST${newReqCount>1?'S':''}</span>` : ''}</h1>
+
+<div>
+  <div class="count"><div class="count-num">${waitlist.length}</div><div class="count-label">Waitlist</div></div>
+  <div class="count"><div class="count-num">${customers.filter(c=>c.status==='new'||c.status==='building').length}</div><div class="count-label">Active</div></div>
+  <div class="count"><div class="count-num">${customers.filter(c=>c.status==='launched').length}</div><div class="count-label">Paying</div></div>
+  <div class="count"><div class="count-num">${newReqCount}</div><div class="count-label">Requests</div></div>
+</div>
+
+<p><a href="/activate" class="btn">⚡ Activate Users</a></p>
+
+${newReqCount > 0 ? `
+<h2>⚡ Special Requests</h2>
+<table><tr><th>Phone</th><th>Business</th><th>Request</th><th>Time</th></tr>
+${specialReqs.filter(r=>r.status==='new').map(r=>`<tr><td>${r.phone}</td><td>${r.site_name||'-'}</td><td>${r.details}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join('')}
+</table>` : ''}
+
+<h2>All Requests</h2>
+<table><tr><th>Phone</th><th>Business</th><th>Request</th><th>Time</th></tr>
+${specialReqs.map(r=>`<tr><td>${r.phone}</td><td>${r.site_name||'-'}</td><td>${r.details}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join('')}
+</table>
+
+<h2>Conversations</h2>
+<table><tr><th>Phone</th><th>State</th><th>Business</th><th>Site</th><th>Updated</th></tr>
+${convos.map(c=>`<tr><td>${c.phone}</td><td><span class="state">${c.state}</span></td><td>${c.site_name||'-'}</td><td>${c.site_url?`<a href="${c.site_url}">${c.site_subdomain}</a>`:'-'}</td><td>${new Date(c.updated_at).toLocaleString()}</td></tr>`).join('')}
+</table>
+</body></html>`;
     res.send(html);
   } catch (err) {
     console.error('Dashboard error:', err);
     res.status(500).send('Dashboard error');
+  }
+});
+
+// Mobile activation page
+app.get('/activate', async (req, res) => {
+  const pin = req.query.pin;
+  const adminPin = process.env.ADMIN_PIN || '1234';
+  if (pin !== adminPin) {
+    return res.send(`<!DOCTYPE html><html><head><title>Marco Activate</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}div{text-align:center;padding:20px}h2{color:#00ff88}input{padding:16px;font-size:1.5rem;border-radius:10px;border:2px solid #333;background:#1a1a1a;color:#fff;text-align:center;width:160px;letter-spacing:8px}button{display:block;margin:16px auto 0;padding:14px 40px;background:#00ff88;color:#000;border:none;border-radius:10px;font-size:1.1rem;font-weight:700;cursor:pointer}</style></head><body><div><h2>Marco</h2><p style="color:#888">Enter PIN to activate users</p><form action="/activate" method="get"><input type="password" name="pin" placeholder="••••" maxlength="8" autofocus><button type="submit">Unlock</button></form></div></body></html>`);
+  }
+
+  try {
+    const waitlist = (await pool.query(
+      `SELECT c.phone, c.created_at, cu.status FROM conversations c
+       LEFT JOIN customers cu ON c.phone = cu.phone
+       WHERE c.state = 'waitlist' ORDER BY c.created_at ASC`
+    )).rows;
+
+    const html = `<!DOCTYPE html><html><head><title>Activate</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#fff;padding:20px;margin:0}
+h1{color:#00ff88}p{color:#888;font-size:14px}
+.card{background:#1a1a1a;border-radius:12px;padding:16px;margin:12px 0;display:flex;align-items:center;justify-content:space-between}
+.phone{font-size:1.1rem;font-weight:600}.time{font-size:12px;color:#666;margin-top:4px}
+.btn{padding:12px 20px;background:#00ff88;color:#000;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;text-decoration:none}
+.empty{text-align:center;padding:60px 20px;color:#555}
+</style></head><body>
+<h1>⚡ Waitlist</h1>
+<p>${waitlist.length} user${waitlist.length !== 1 ? 's' : ''} waiting</p>
+${waitlist.length === 0 ? '<div class="empty">No one on the waitlist right now.</div>' :
+  waitlist.map(u => `
+  <div class="card">
+    <div><div class="phone">${u.phone}</div><div class="time">Joined ${new Date(u.created_at).toLocaleString()}</div></div>
+    <form method="post" action="/activate-user">
+      <input type="hidden" name="phone" value="${u.phone}">
+      <input type="hidden" name="pin" value="${pin}">
+      <button class="btn" type="submit">Activate</button>
+    </form>
+  </div>`).join('')}
+</body></html>`;
+    res.send(html);
+  } catch (err) {
+    res.status(500).send('Error loading waitlist');
+  }
+});
+
+app.post('/activate-user', async (req, res) => {
+  const pin = req.body.pin;
+  const adminPin = process.env.ADMIN_PIN || '1234';
+  if (pin !== adminPin) return res.status(403).send('Unauthorized');
+
+  const phone = req.body.phone;
+  try {
+    await pool.query(`UPDATE conversations SET state = 'greeting' WHERE phone = $1`, [phone]);
+    await pool.query(`UPDATE customers SET status = 'new' WHERE phone = $1`, [phone]);
+    const convo = await pool.query('SELECT sendblue_number FROM conversations WHERE phone = $1', [phone]);
+    const marcoNumber = convo.rows[0]?.sendblue_number || '';
+    await sendReply(phone, "hey it's Marco. are you ready to take the internet by storm? let's build you a site. business or personal?", marcoNumber);
+    await pool.query(`UPDATE conversations SET state = 'onboarding' WHERE phone = $1`, [phone]);
+    res.redirect(`/activate?pin=${pin}`);
+  } catch (err) {
+    res.status(500).send('Activation failed: ' + err.message);
   }
 });
 
