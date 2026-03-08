@@ -13,8 +13,8 @@ const deployer = new CloudflareDeployer();
 
 // Marco phone numbers
 const MARCO_NUMBERS = {
-  primary: '+16232843671',   // 623 number (current)
-  toll_free: '+18889007501'  // 888 number (testing)
+  primary: '+16452063407',   // 645 number (current SendBlue)
+  toll_free: '+18889007501'  // 888 number (Twilio)
 };
 
 const app = express();
@@ -979,8 +979,9 @@ app.post('/waitlist', async (req, res) => {
     );
     // Also create conversation record so they show on dashboard
     await pool.query(
-      'INSERT INTO conversations (phone, state) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING',
-      [phone, 'waitlist']
+      `INSERT INTO conversations (phone, state, sendblue_number) VALUES ($1, $2, $3)
+       ON CONFLICT (phone) DO UPDATE SET sendblue_number = EXCLUDED.sendblue_number`,
+      [phone, 'waitlist', MARCO_NUMBERS.primary]
     );
     // Register in SendBlue contacts
     await registerSendBlueContact(phone);
