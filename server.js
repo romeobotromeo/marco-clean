@@ -763,7 +763,8 @@ async function buildAndSendSite(phone, marcoNumber) {
     const siteUrl = await generateSiteWithClaude(data);
 
     const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
-    const message = `here's your site: ${siteUrl}\n\n$9.99/mo to keep it and start editing: ${paymentLink}`;
+    const siteMessage = `here's your site: ${siteUrl}`;
+    const paymentMessage = `i hope you like the site, i worked on it all night ;). if you want to keep building sign up - it's only $9.99/mo. cancel any time. here's the link and i hope you stay on board: ${paymentLink}`;
 
     await pool.query(
       "UPDATE conversations SET expires_at = NOW() + INTERVAL '48 hours', site_url = $1, state = 'awaiting_payment' WHERE phone = $2",
@@ -775,8 +776,15 @@ async function buildAndSendSite(phone, marcoNumber) {
     await sendReply(phone, "your site is built. sending the link in a sec...", marcoNumber);
     await new Promise(resolve => setTimeout(resolve, 90000));
 
-    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [phone, 'outbound', message]);
-    await sendReply(phone, message, marcoNumber);
+    // Send the site link
+    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [phone, 'outbound', siteMessage]);
+    await sendReply(phone, siteMessage, marcoNumber);
+
+    // Wait 60s for them to click around, then pitch payment
+    await new Promise(resolve => setTimeout(resolve, 60000));
+
+    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [phone, 'outbound', paymentMessage]);
+    await sendReply(phone, paymentMessage, marcoNumber);
 
     console.log(`Site built and sent to ${phone}: ${siteUrl}`);
   } catch (err) {
