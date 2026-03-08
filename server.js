@@ -763,13 +763,18 @@ async function buildAndSendSite(phone, marcoNumber) {
     const siteUrl = await generateSiteWithClaude(data);
 
     const paymentLink = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test';
-    const message = `here's your site: ${siteUrl}\n\ngive it 2-3 min to load the first time.\n\n$9.99/mo to keep it and start editing: ${paymentLink}`;
+    const message = `here's your site: ${siteUrl}\n\n$9.99/mo to keep it and start editing: ${paymentLink}`;
 
     await pool.query(
       "UPDATE conversations SET expires_at = NOW() + INTERVAL '48 hours', site_url = $1, state = 'awaiting_payment' WHERE phone = $2",
       [siteUrl, phone]
     );
     await pool.query('UPDATE customers SET status = $1, site_url = $2 WHERE phone = $3', ['building', siteUrl, phone]);
+
+    // Wait 90s for Cloudflare CDN to fully propagate before texting the link
+    await sendReply(phone, "your site is built. sending the link in a sec...", marcoNumber);
+    await new Promise(resolve => setTimeout(resolve, 90000));
+
     await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [phone, 'outbound', message]);
     await sendReply(phone, message, marcoNumber);
 
@@ -1109,12 +1114,13 @@ app.post('/activate-user', async (req, res) => {
     await pool.query(`UPDATE conversations SET state = 'greeting' WHERE phone = $1`, [phone]);
     await pool.query(`UPDATE customers SET status = 'new' WHERE phone = $1`, [phone]);
     const convo = await pool.query('SELECT sendblue_number FROM conversations WHERE phone = $1', [phone]);
-    const marcoNumber = convo.rows[0]?.sendblue_number || '';
+    const marcoNumber = convo.rows[0]?.sendblue_number || MARCO_NUMBERS.primary;
     await sendReply(phone, "hey it's Marco. are you ready to take the internet by storm? let's build you a site. business or personal?", marcoNumber);
     await pool.query(`UPDATE conversations SET state = 'onboarding' WHERE phone = $1`, [phone]);
     res.redirect(`/activate?pin=${pin}`);
   } catch (err) {
-    res.status(500).send('Activation failed: ' + err.message);
+    console.error('Activation failed:', err.message);
+    res.redirect(`/activate?pin=${pin}&error=1`);
   }
 });
 
