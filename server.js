@@ -55,7 +55,7 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
     );
 
     // Send confirmation via the right provider
-    const marcoNumber = convoResult.rows[0]?.sendblue_number || '';
+    const marcoNumber = convoResult.rows[0]?.sendblue_number || MARCO_NUMBERS.primary;
     try {
       await sendReply(normalizedPhone, "payment received. your site is live and yours to keep. what do you want to change?", marcoNumber);
     } catch (err) {
