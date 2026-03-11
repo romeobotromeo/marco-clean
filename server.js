@@ -11,6 +11,15 @@ const CloudflareDeployer = require('./cloudflare-deployer');
 const templateEngine = new TemplateEngine();
 const deployer = new CloudflareDeployer();
 
+// Waitlist mode toggle — persisted in DB, loaded on startup
+let waitlistEnabled = false;
+async function loadWaitlistSetting() {
+  try {
+    const r = await pool.query(`SELECT value FROM app_settings WHERE key = 'waitlist_enabled'`);
+    if (r.rows.length > 0) waitlistEnabled = r.rows[0].value === 'true';
+  } catch (e) { /* table may not exist yet */ }
+}
+
 // Marco phone numbers
 const MARCO_NUMBERS = {
   primary: '+16452063407',   // 645 number (current SendBlue)
@@ -287,9 +296,10 @@ async function getOrCreateConversation(phone) {
 
   const result = await pool.query('SELECT * FROM conversations WHERE phone = $1', [phone]);
   if (result.rows.length > 0) return result.rows[0];
+  const newState = waitlistEnabled ? 'waitlist' : 'greeting';
   const insert = await pool.query(
     'INSERT INTO conversations (phone, state) VALUES ($1, $2) RETURNING *',
-    [phone, 'waitlist']
+    [phone, newState]
   );
   return insert.rows[0];
 }
@@ -1045,7 +1055,13 @@ a{color:#00ff88}
   <div class="count"><div class="count-num">${newReqCount}</div><div class="count-label">Requests</div></div>
 </div>
 
-<p><a href="/activate" class="btn">⚡ Activate Users</a></p>
+<p>
+  <a href="/activate" class="btn">⚡ Activate Users</a>
+  &nbsp;
+  <button class="btn" style="background:${waitlistEnabled ? '#ff4444' : '#555'};color:#fff" onclick="fetch('/admin/toggle-waitlist',{method:'POST'}).then(r=>r.json()).then(d=>{this.style.background=d.waitlistEnabled?'#ff4444':'#555';this.textContent=d.waitlistEnabled?'🚨 Waitlist ON — Click to Disable':'✅ Waitlist OFF — Click to Enable'})">
+    ${waitlistEnabled ? '🚨 Waitlist ON — Click to Disable' : '✅ Waitlist OFF — Click to Enable'}
+  </button>
+</p>
 
 ${newReqCount > 0 ? `
 <h2>⚡ Special Requests</h2>
@@ -1334,8 +1350,23 @@ app.post('/cleanup-expired', async (req, res) => {
   }
 });
 
+app.post('/admin/toggle-waitlist', async (req, res) => {
+  waitlistEnabled = !waitlistEnabled;
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('waitlist_enabled', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [String(waitlistEnabled)]
+    );
+  } catch (e) { console.error('Failed to persist waitlist setting:', e.message); }
+  res.json({ waitlistEnabled });
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Marco running on port ${PORT}`));
+app.listen(PORT, async () => {
+  await loadWaitlistSetting();
+  console.log(`Marco running on port ${PORT} — waitlist: ${waitlistEnabled}`);
+});
 
 // Run cleanup daily at 3am UTC
 cron.schedule('0 3 * * *', async () => {
