@@ -848,7 +848,7 @@ app.post('/admin/fix-domains', async (req, res) => {
 
 // Admin deploy — manually deploy a site to Cloudflare and text the user
 app.post('/admin/deploy/:phone', async (req, res) => {
-  const phone = '+' + req.params.phone;
+  const phone = req.params.phone.startsWith('+') ? req.params.phone : '+' + req.params.phone;
   const { subdomain, message } = req.body;
   try {
     const sitePath = path.join(__dirname, 'sites', `${subdomain}.html`);
@@ -890,7 +890,7 @@ app.post('/admin/deploy/:phone', async (req, res) => {
 
 // Admin bypass — instant activation for live demos (skips payment + password)
 app.post('/admin/bypass/:phone', async (req, res) => {
-  const phone = '+' + req.params.phone;
+  const phone = req.params.phone.startsWith('+') ? req.params.phone : '+' + req.params.phone;
   try {
     await pool.query(
       `UPDATE conversations SET state = 'active', paid_at = NOW(), expires_at = NULL WHERE phone = $1`,
@@ -911,7 +911,7 @@ app.post('/admin/bypass/:phone', async (req, res) => {
 
 // Admin delete — remove a user entirely
 app.post('/admin/delete/:phone', async (req, res) => {
-  const phone = '+' + req.params.phone;
+  const phone = req.params.phone.startsWith('+') ? req.params.phone : '+' + req.params.phone;
   try {
     await pool.query('DELETE FROM messages WHERE phone = $1', [phone]);
     await pool.query('DELETE FROM conversations WHERE phone = $1', [phone]);
@@ -924,7 +924,7 @@ app.post('/admin/delete/:phone', async (req, res) => {
 
 // Admin debug — check conversation state
 app.get('/admin/debug/:phone', async (req, res) => {
-  const phone = '+' + req.params.phone;
+  const phone = req.params.phone.startsWith('+') ? req.params.phone : '+' + req.params.phone;
   try {
     const convo = await pool.query('SELECT * FROM conversations WHERE phone = $1', [phone]);
     const msgs = await pool.query('SELECT direction, body, created_at FROM messages WHERE phone = $1 ORDER BY created_at DESC LIMIT 10', [phone]);
@@ -939,7 +939,7 @@ app.get('/admin/debug/:phone', async (req, res) => {
 
 // Admin reset for testing
 app.post('/admin/reset/:phone', async (req, res) => {
-  const phone = '+' + req.params.phone;
+  const phone = req.params.phone.startsWith('+') ? req.params.phone : '+' + req.params.phone;
   try {
     await pool.query(
       `UPDATE conversations SET state = 'greeting', site_name = NULL, site_type = NULL, site_url = NULL, site_html = NULL, site_subdomain = NULL, paid_at = NULL, expires_at = NULL, contact_phone = NULL, is_personal = FALSE, is_existing = FALSE WHERE phone = $1`,
@@ -954,7 +954,7 @@ app.post('/admin/reset/:phone', async (req, res) => {
 
 // Admin activate — move from waitlist to greeting (starts onboarding)
 app.post('/admin/activate/:phone', async (req, res) => {
-  const phone = '+' + req.params.phone;
+  const phone = req.params.phone.startsWith('+') ? req.params.phone : '+' + req.params.phone;
   try {
     await pool.query(`UPDATE conversations SET state = 'greeting' WHERE phone = $1`, [phone]);
     await pool.query(`UPDATE customers SET status = 'new' WHERE phone = $1`, [phone]);
