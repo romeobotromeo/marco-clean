@@ -247,6 +247,11 @@ When the user asks you to change something about their site, you MUST:
 
 When the user is NOT asking for a site change, just respond conversationally. Do NOT include HTML markers.
 
+PHOTOS:
+- If the user sends a photo, embed it directly in the site using a base64 data URL in an <img> tag
+- Place it where it makes sense (hero section, gallery, about section, etc.)
+- If they send a photo with no text, use your judgment on where it fits best
+
 IMPORTANT:
 - Always return the COMPLETE HTML document, not just a snippet
 - Preserve all existing styles and structure unless asked to change them
@@ -324,7 +329,7 @@ async function updateConversation(phone, newState, extracted) {
   );
 }
 
-async function processState(convo, message) {
+async function processState(convo, message, mediaUrl = null) {
   // Active (paid) users get full AI Marco with site editing
   if (convo.state === 'active') {
     // 1. Retrieve current site HTML
@@ -348,14 +353,31 @@ async function processState(convo, message) {
       }
     }
 
-    // Ensure current message is included (it may already be in messages table from webhook)
+    // Ensure current message is included
     if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
       messages.push({ role: 'user', content: message });
     } else {
-      // Current message is the last inbound, make sure it's there
       const lastMsg = messages[messages.length - 1];
       if (!lastMsg.content.includes(message)) {
         lastMsg.content += '\n' + message;
+      }
+    }
+
+    // If photo attached, download and include as vision content on the last user message
+    if (mediaUrl) {
+      try {
+        const imgResp = await axios.get(mediaUrl, { responseType: 'arraybuffer' });
+        const imgBase64 = Buffer.from(imgResp.data).toString('base64');
+        const contentType = imgResp.headers['content-type'] || 'image/jpeg';
+        const lastMsg = messages[messages.length - 1];
+        const textContent = typeof lastMsg.content === 'string' ? lastMsg.content : message;
+        lastMsg.content = [
+          { type: 'image', source: { type: 'base64', media_type: contentType, data: imgBase64 } },
+          { type: 'text', text: textContent || 'add this photo to my site' }
+        ];
+        console.log(`Photo attached for ${convo.phone}: ${mediaUrl}`);
+      } catch (imgErr) {
+        console.error(`Failed to fetch photo for ${convo.phone}:`, imgErr.message);
       }
     }
 
@@ -1166,17 +1188,23 @@ app.post('/sms', async (req, res) => {
   // Ignore outbound echoes
   if (req.body.is_outbound) return res.status(200).json({ ok: true });
 
-  // Ignore MMS with no text (photos only) — respond once and stop
-  if (!body.trim() && req.body.media_url) {
-    console.log(`MMS photo from ${from} — no text, ignoring`);
-    return res.status(200).json({ ok: true });
+  const mediaUrl = req.body.media_url || null;
+
+  // Ignore photo-only MMS unless user is active (active users can add photos to their site)
+  if (!body.trim() && mediaUrl) {
+    const existingConvo = await pool.query('SELECT state FROM conversations WHERE phone = $1', [from]);
+    const state = existingConvo.rows[0]?.state;
+    if (state !== 'active') {
+      console.log(`MMS photo from ${from} (state: ${state}) — ignoring`);
+      return res.status(200).json({ ok: true });
+    }
   }
 
-  console.log(`SMS from ${from}: ${body}`);
+  console.log(`SMS from ${from}: ${body}${mediaUrl ? ' [+photo]' : ''}`);
 
   try {
     // Log inbound message
-    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body]);
+    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body || '[photo]']);
 
     // Get or create conversation, always update to most recent sendblue number used
     const convo = await getOrCreateConversation(from);
@@ -1189,7 +1217,7 @@ app.post('/sms', async (req, res) => {
     await registerSendBlueContact(from);
 
     // Process through state machine
-    const result = await processState(convo, body);
+    const result = await processState(convo, body, mediaUrl);
 
     // Update conversation state
     await updateConversation(from, result.newState, result.extracted);
@@ -1224,12 +1252,13 @@ app.post('/sms-twilio', async (req, res) => {
   const from = req.body.From || '';
   const body = req.body.Body || '';
   const twilioNumber = req.body.To || MARCO_NUMBERS.toll_free;
+  const mediaUrl = req.body.MediaUrl0 || null;
 
-  console.log(`SMS (Twilio) from ${from}: ${body}`);
+  console.log(`SMS (Twilio) from ${from}: ${body}${mediaUrl ? ' [+photo]' : ''}`);
 
   try {
     // Log inbound message
-    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body]);
+    await pool.query('INSERT INTO messages (phone, direction, body) VALUES ($1, $2, $3)', [from, 'inbound', body || '[photo]']);
 
     // Get or create conversation, store the marco number used
     const convo = await getOrCreateConversation(from);
@@ -1238,7 +1267,7 @@ app.post('/sms-twilio', async (req, res) => {
     }
 
     // Process through state machine
-    const result = await processState(convo, body);
+    const result = await processState(convo, body, mediaUrl);
 
     // Update conversation state
     await updateConversation(from, result.newState, result.extracted);
