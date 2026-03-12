@@ -5,6 +5,7 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
+const rateLimit = require('express-rate-limit');
 const TemplateEngine = require('./template-engine');
 const CloudflareDeployer = require('./cloudflare-deployer');
 
@@ -85,6 +86,12 @@ app.use((req, res, next) => {
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Rate limiting
+const smsRateLimit = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false }); // 10 msgs/min per IP
+const adminRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false }); // 50 reqs/15min
+app.use(['/sms', '/sms-twilio'], smsRateLimit);
+app.use(['/admin', '/admin/*', '/dashboard', '/activate', '/activate-user'], adminRateLimit);
 
 // Admin auth middleware — protects /dashboard, /admin/*, /activate, /activate-user
 function requireAdminAuth(req, res, next) {
@@ -329,8 +336,10 @@ async function updateConversation(phone, newState, extracted) {
   const values = [newState];
   let idx = 2;
 
+  const allowedColumns = ['site_name', 'site_type', 'is_personal', 'is_existing', 'contact_phone'];
   if (extracted) {
     for (const [key, value] of Object.entries(extracted)) {
+      if (!allowedColumns.includes(key)) continue;
       updates.push(`${key} = $${idx}`);
       values.push(value);
       idx++;
@@ -1197,7 +1206,7 @@ app.get('/dellvale', (req, res) => {
 // --- SMS Webhook (SendBlue) ---
 app.post('/sms', async (req, res) => {
   const from = req.body.from_number || '';
-  const body = req.body.content || '';
+  const body = (req.body.content || '').slice(0, 1000);
   const sendblueNumber = req.body.sendblue_number || req.body.to_number || '';
 
   // Ignore outbound echoes
@@ -1265,7 +1274,7 @@ app.post('/sms', async (req, res) => {
 // --- SMS Webhook (Twilio — 888 number) ---
 app.post('/sms-twilio', async (req, res) => {
   const from = req.body.From || '';
-  const body = req.body.Body || '';
+  const body = (req.body.Body || '').slice(0, 1000);
   const twilioNumber = req.body.To || MARCO_NUMBERS.toll_free;
   const mediaUrl = req.body.MediaUrl0 || null;
 
