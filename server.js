@@ -85,6 +85,21 @@ app.use((req, res, next) => {
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Admin auth middleware — protects /dashboard, /admin/*, /activate, /activate-user
+function requireAdminAuth(req, res, next) {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) return next(); // if not set, open (dev mode)
+  const provided = req.query.secret || req.body?.secret || req.headers['x-admin-secret'];
+  if (provided === secret) return next();
+  res.status(401).send(`<!DOCTYPE html><html><head><title>Marco Admin</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}div{text-align:center;padding:20px}h2{color:#00ff88}input{padding:12px 16px;font-size:1rem;border-radius:8px;border:2px solid #333;background:#1a1a1a;color:#fff;width:260px}button{display:block;margin:12px auto 0;padding:12px 32px;background:#00ff88;color:#000;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer}</style></head><body><div><h2>Marco Admin</h2><form method="get" action="${req.path}"><input type="password" name="secret" placeholder="Admin secret" autofocus><button type="submit">Enter</button></form></div></body></html>`);
+}
+app.use(['/admin', '/admin/*', '/dashboard', '/activate', '/activate-user'], requireAdminAuth);
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 app.use(express.static(__dirname));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -1088,17 +1103,17 @@ a{color:#00ff88}
 ${newReqCount > 0 ? `
 <h2>⚡ Special Requests</h2>
 <table><tr><th>Phone</th><th>Business</th><th>Request</th><th>Time</th></tr>
-${specialReqs.filter(r=>r.status==='new').map(r=>`<tr><td>${r.phone}</td><td>${r.site_name||'-'}</td><td>${r.details}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join('')}
+${specialReqs.filter(r=>r.status==='new').map(r=>`<tr><td>${escHtml(r.phone)}</td><td>${escHtml(r.site_name)||'-'}</td><td>${escHtml(r.details)}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join('')}
 </table>` : ''}
 
 <h2>All Requests</h2>
 <table><tr><th>Phone</th><th>Business</th><th>Request</th><th>Time</th></tr>
-${specialReqs.map(r=>`<tr><td>${r.phone}</td><td>${r.site_name||'-'}</td><td>${r.details}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join('')}
+${specialReqs.map(r=>`<tr><td>${escHtml(r.phone)}</td><td>${escHtml(r.site_name)||'-'}</td><td>${escHtml(r.details)}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join('')}
 </table>
 
 <h2>Conversations</h2>
 <table><tr><th>Phone</th><th>State</th><th>Business</th><th>Site</th><th>Updated</th></tr>
-${convos.map(c=>`<tr><td>${c.phone}</td><td><span class="state">${c.state}</span></td><td>${c.site_name||'-'}</td><td>${c.site_url?`<a href="${c.site_url}">${c.site_subdomain}</a>`:'-'}</td><td>${new Date(c.updated_at).toLocaleString()}</td></tr>`).join('')}
+${convos.map(c=>`<tr><td>${escHtml(c.phone)}</td><td><span class="state">${escHtml(c.state)}</span></td><td>${escHtml(c.site_name)||'-'}</td><td>${c.site_url?`<a href="${escHtml(c.site_url)}">${escHtml(c.site_subdomain)}</a>`:'-'}</td><td>${new Date(c.updated_at).toLocaleString()}</td></tr>`).join('')}
 </table>
 </body></html>`;
     res.send(html);
