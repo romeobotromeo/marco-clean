@@ -1430,7 +1430,7 @@ app.post('/cleanup-expired', async (req, res) => {
 });
 
 // Palmero: provision DNS (run once after deploy)
-app.get('/admin/palmero-dns', requireAdmin, async (req, res) => {
+app.get('/admin/palmero-dns', requireAdminAuth, async (req, res) => {
   const { run } = require('./palmero/setup-dns');
   try {
     const result = await run();
@@ -1441,7 +1441,7 @@ app.get('/admin/palmero-dns', requireAdmin, async (req, res) => {
 });
 
 // Palmero: manually trigger article generation
-app.post('/admin/palmero-article', requireAdmin, async (req, res) => {
+app.post('/admin/palmero-article', requireAdminAuth, async (req, res) => {
   try {
     const result = await runDailyArticle(pool);
     res.json({ ok: true, article: result });
