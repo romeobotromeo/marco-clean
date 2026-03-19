@@ -33,19 +33,29 @@ async function run() {
   );
   if ((existing.data.result || []).length > 0) {
     const r = existing.data.result[0];
-    console.log(`[PALMERO DNS] Record already exists: ${r.type} → ${r.content}`);
+    // If proxied, update to DNS-only to avoid Cloudflare→Cloudflare loop with Render
+    if (r.proxied) {
+      const patch = await axios.patch(
+        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${r.id}`,
+        { proxied: false },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      );
+      console.log(`[PALMERO DNS] Updated to DNS-only (was proxied)`);
+      return { status: 'updated', record: patch.data.result };
+    }
+    console.log(`[PALMERO DNS] Record already exists (DNS-only): ${r.type} → ${r.content}`);
     return { status: 'exists', record: r };
   }
 
-  // Create CNAME
+  // Create CNAME (DNS-only — Render is already on Cloudflare, proxying causes Error 1000)
   const res = await axios.post(
     `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
-    { type: 'CNAME', name: SUBDOMAIN, content: TARGET, proxied: true, ttl: 1 },
+    { type: 'CNAME', name: SUBDOMAIN, content: TARGET, proxied: false, ttl: 1 },
     { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
   );
 
   if (!res.data.success) throw new Error(JSON.stringify(res.data.errors));
-  console.log(`[PALMERO DNS] Created: ${SUBDOMAIN}.${ZONE_DOMAIN} → ${TARGET} (proxied)`);
+  console.log(`[PALMERO DNS] Created: ${SUBDOMAIN}.${ZONE_DOMAIN} → ${TARGET} (DNS-only)`);
   return { status: 'created', url: `https://${SUBDOMAIN}.${ZONE_DOMAIN}` };
 }
 
