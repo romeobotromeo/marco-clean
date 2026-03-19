@@ -8,6 +8,8 @@ const cron = require('node-cron');
 const rateLimit = require('express-rate-limit');
 const TemplateEngine = require('./template-engine');
 const CloudflareDeployer = require('./cloudflare-deployer');
+const palmeroRouter = require('./palmero/routes');
+const { runDailyArticle } = require('./palmero/article-generator');
 
 const templateEngine = new TemplateEngine();
 const deployer = new CloudflareDeployer();
@@ -28,6 +30,16 @@ const MARCO_NUMBERS = {
 };
 
 const app = express();
+
+// ── Palmero virtual-host routing ──────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.hostname === '4175palmero.textmarco.com') {
+    return palmeroRouter(req, res, next);
+  }
+  next();
+});
+// Also accessible at /palmero/* for local testing
+app.use('/palmero', palmeroRouter);
 
 // Stripe webhook needs raw body — must come BEFORE express.json()
 app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -111,6 +123,7 @@ app.use(express.static(__dirname));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+app.set('pool', pool);
 
 // --- SendBlue contact registration ---
 async function registerSendBlueContact(phone) {
@@ -354,6 +367,19 @@ async function updateConversation(phone, newState, extracted) {
 }
 
 async function processState(convo, message, mediaUrl = null) {
+  // ── Palmero giveaway keyword ───────────────────────────────────────────────
+  if (message.trim().toUpperCase() === 'PALMERO') {
+    try {
+      await pool.query(
+        `INSERT INTO palmero_giveaway (phone, source) VALUES ($1, 'sms') ON CONFLICT (phone) DO NOTHING`,
+        [convo.phone]
+      );
+    } catch (err) {
+      console.error('[PALMERO] Giveaway SMS insert error:', err.message);
+    }
+    return { response: `You're in the giveaway for 4175 Palmero Dr. We'll be in touch before closing. See the property at 4175palmero.textmarco.com` };
+  }
+
   // Active (paid) users get full AI Marco with site editing
   if (convo.state === 'active') {
     // 1. Retrieve current site HTML
@@ -1403,6 +1429,27 @@ app.post('/cleanup-expired', async (req, res) => {
   }
 });
 
+// Palmero: provision DNS (run once after deploy)
+app.get('/admin/palmero-dns', requireAdmin, async (req, res) => {
+  const { run } = require('./palmero/setup-dns');
+  try {
+    const result = await run();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Palmero: manually trigger article generation
+app.post('/admin/palmero-article', requireAdmin, async (req, res) => {
+  try {
+    const result = await runDailyArticle(pool);
+    res.json({ ok: true, article: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/admin/toggle-waitlist', async (req, res) => {
   waitlistEnabled = !waitlistEnabled;
   try {
@@ -1418,8 +1465,30 @@ app.post('/admin/toggle-waitlist', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   await loadWaitlistSetting();
+  // Palmero tables (idempotent)
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS palmero_giveaway (
+        id SERIAL PRIMARY KEY, phone TEXT NOT NULL,
+        source TEXT DEFAULT 'web', created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS palmero_giveaway_phone_idx ON palmero_giveaway (phone);
+      CREATE TABLE IF NOT EXISTS palmero_articles (
+        id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, keyword TEXT NOT NULL,
+        title TEXT NOT NULL, meta_desc TEXT, body_html TEXT NOT NULL,
+        word_count INTEGER, published_at TIMESTAMPTZ DEFAULT NOW(), created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log('[PALMERO] Tables ready');
+  } catch (e) { console.error('[PALMERO] Migration error:', e.message); }
   console.log(`Marco running on port ${PORT} — waitlist: ${waitlistEnabled}`);
 });
+
+// Palmero daily article — 6am PT
+cron.schedule('0 6 * * *', async () => {
+  console.log('[PALMERO] Running daily article generation...');
+  await runDailyArticle(pool);
+}, { timezone: 'America/Los_Angeles' });
 
 // Run cleanup daily at 3am UTC
 cron.schedule('0 3 * * *', async () => {
