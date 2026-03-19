@@ -1440,6 +1440,17 @@ app.get('/admin/palmero-dns', requireAdminAuth, async (req, res) => {
   }
 });
 
+// Palmero: deploy Cloudflare Worker proxy (fixes Error 1000 — Render is on CF network)
+app.get('/admin/palmero-worker', requireAdminAuth, async (req, res) => {
+  const { run } = require('./palmero/setup-worker');
+  try {
+    const result = await run();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.response?.data || err.message });
+  }
+});
+
 // Palmero: manually trigger article generation
 app.post('/admin/palmero-article', requireAdminAuth, async (req, res) => {
   try {
