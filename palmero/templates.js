@@ -548,7 +548,9 @@ ${buildTicker()}
     <span class="preview-title display">Area Guide</span>
     <span class="preview-arrow">Read →</span>
   </a>
-</div>`;
+</div>
+
+<img src="/public/yard.jpg" alt="4175 Palmero Dr — Mount Washington garden" style="width:100%;display:block;border-top:0.5px solid var(--sand);" loading="lazy">`;
 
   return pageShell({
     title:    `${config.address.street} — ${config.neighborhood}, Los Angeles`,
