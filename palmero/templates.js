@@ -510,7 +510,7 @@ ${buildTicker()}
 <div class="builder-section">
   <span class="section-label">The Builder</span>
   <h2 class="display">Wiley — <em class="display-italic">a legacy in concrete and glass</em></h2>
-  <p>Wiley was a noted, self-taught homebuilder who constructed nearly 1,000 homes across the region from the 1950s through the 1970s, known for their contemporary styling. 4175 Palmero Dr is a product of that era — a single-level Mid-Century Traditional built with the proportions and craft that defined his work.</p>
+  <p>4175 Palmero Dr was built by Wiley — a noted, self-taught homebuilder who constructed nearly 1,000 homes across the region from the 1950s through the 1970s, known for their contemporary styling and quality craftsmanship. This home is a product of that legacy.</p>
 </div>
 
 <hr class="divider">
