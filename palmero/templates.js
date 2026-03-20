@@ -498,7 +498,7 @@ ${buildTicker()}
     <span class="stat-unit">Sq Ft Lot</span>
   </div>
   <div class="stat-cell">
-    <span class="stat-num display">${config.neighborhood.split(' ')[0]}</span>
+    <span class="stat-num display" style="font-size:clamp(1rem,2.5vw,1.4rem); letter-spacing:0.05em;">MT WASHINGTON</span>
     <span class="stat-unit">Neighborhood</span>
   </div>
 </div>
@@ -506,8 +506,8 @@ ${buildTicker()}
 <div class="giveaway" id="giveaway">
   <div class="giveaway-text">
     <span class="section-label">Giveaway</span>
-    <h2 class="display">Win a private<br><em class="display-italic">tour of this home</em></h2>
-    <p>${config.giveawayPrize}.</p>
+    <h2 class="display">Win a<br><em class="display-italic">${config.giveawayPrize}</em></h2>
+    <p>Enter your number for a chance to win. We'll announce the winner before closing.</p>
     <p>Enter your number below or text <strong>${config.smsKeyword}</strong> to ${config.smsNumber}. We'll announce the winner before closing.</p>
   </div>
   <div class="giveaway-form-wrap">
@@ -661,6 +661,7 @@ function theHousePage() {
     <span class="section-label">Exterior</span>
     <h2 class="display">The yard is <em class="display-italic">half the house</em></h2>
     <p>Large open-air patio off the living room french doors — plenty of room for entertaining year round. Large yard with room for a garden, drought tolerant plants, and a slight hill behind the home that adds privacy. Fully enclosed fenced yard. 2-car garage. Security system included.</p>
+    <img src="/palmero/public/yard.jpg" alt="4175 Palmero Dr yard — Mount Washington, Los Angeles" style="width:100%;margin-top:1.5rem;display:block;border:0.5px solid var(--sand);" loading="lazy">
   </div>
 
   <div class="house-section house-full" style="padding: 3rem 2.5rem;">

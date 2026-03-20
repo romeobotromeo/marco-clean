@@ -14,7 +14,7 @@ module.exports = {
   price:     '$1,295,000',
   beds:      3,
   baths:     2.5,
-  sqft:      1842,
+  sqft:      1536,
   lot:       '10,145 sq ft',
   yearBuilt: 1956,
   garage:    '2-car garage',
@@ -22,7 +22,7 @@ module.exports = {
   // Running ticker items
   tickerItems: [
     '3 BD / 2.5 BA',
-    '1,842 sq ft',
+    '1,536 sq ft',
     'Built 1956',
     'Mount Washington',
     'Highland Park Adjacent',
