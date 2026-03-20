@@ -325,6 +325,10 @@ function homePage({ success = false } = {}) {
   border-right: 0.5px solid var(--sand);
 }
 .stat-cell:last-child { border-right: none; }
+.builder-section {
+  padding: 3rem 2.5rem;
+  max-width: 680px;
+}
 .stat-num {
   font-family: 'Cormorant Garamond', serif;
   font-weight: 300;
@@ -462,8 +466,8 @@ ${buildTicker()}
   </div>
   <div class="hero-meta">
     <div>
-      <span class="section-label">Listed at</span>
-      <div class="hero-price display">${config.price}</div>
+      <span class="section-label">Listing Price</span>
+      <div class="hero-price display" style="font-size:clamp(1.2rem,3vw,2rem); letter-spacing:0.15em;">COMING SOON</div>
     </div>
     <hr class="hero-divider">
     <div class="hero-specs">
@@ -503,6 +507,14 @@ ${buildTicker()}
   </div>
 </div>
 
+<div class="builder-section">
+  <span class="section-label">The Builder</span>
+  <h2 class="display">Wiley — <em class="display-italic">a legacy in concrete and glass</em></h2>
+  <p>Wiley was a noted, self-taught homebuilder who constructed nearly 1,000 homes across the region from the 1950s through the 1970s, known for their contemporary styling. 4175 Palmero Dr is a product of that era — a single-level Mid-Century Traditional built with the proportions and craft that defined his work.</p>
+</div>
+
+<hr class="divider">
+
 <div class="giveaway" id="giveaway">
   <div class="giveaway-text">
     <span class="section-label">Giveaway</span>
@@ -540,7 +552,7 @@ ${buildTicker()}
 
   return pageShell({
     title:    `${config.address.street} — ${config.neighborhood}, Los Angeles`,
-    desc:     `${config.beds}BD/${config.baths}BA ${config.sqft} sq ft home in ${config.neighborhood}, Los Angeles. Built ${config.yearBuilt}. Listed at ${config.price}.`,
+    desc:     `${config.beds}BD/${config.baths}BA ${config.sqft} sq ft Mid-Century home in ${config.neighborhood}, Los Angeles. Built ${config.yearBuilt}. Coming soon.`,
     url:      config.siteUrl,
     current:  '/',
     content,
@@ -1036,7 +1048,7 @@ function articlePage(article) {
     ${article.body_html}
     <div class="article-cta">
       <h3 class="display">4175 Palmero Dr</h3>
-      <p>${config.neighborhood}, Los Angeles · ${config.beds} BD / ${config.baths} BA · ${config.price}</p>
+      <p>${config.neighborhood}, Los Angeles · ${config.beds} BD / ${config.baths} BA · Coming Soon</p>
       <a href="/#giveaway" class="btn btn-terracotta" style="margin-top:1rem;">Enter the Giveaway</a>
     </div>
   </div>
