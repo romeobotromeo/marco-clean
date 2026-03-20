@@ -626,7 +626,7 @@ function theHousePage() {
 <div class="house-hero">
   <span class="section-label">4175 Palmero Dr — ${config.neighborhood}</span>
   <h1 class="display">The<br><em class="display-italic">House</em></h1>
-  <p class="subtitle">A 1928 Craftsman bungalow on a hillside lot in Mount Washington, quietly updated for the way people live now while keeping everything that made it worth saving.</p>
+  <p class="subtitle">A 1956 Mid-Century Traditional on a large corner lot in Mount Washington — single level, flooded with light, with a yard built for year-round living.</p>
 </div>
 
 <div class="house-grid">
@@ -635,44 +635,44 @@ function theHousePage() {
     <h2 class="display">By the numbers</h2>
     <ul>
       <li>Bedrooms <span>${config.beds}</span></li>
-      <li>Bathrooms <span>${config.baths} full</span></li>
+      <li>Bathrooms <span>${config.baths}</span></li>
       <li>Living area <span>${config.sqft.toLocaleString()} sq ft</span></li>
       <li>Lot size <span>${config.lot}</span></li>
       <li>Year built <span>${config.yearBuilt}</span></li>
-      <li>Style <span>Craftsman Bungalow</span></li>
+      <li>Style <span>Mid-Century Traditional</span></li>
       <li>Parking <span>2-car garage</span></li>
     </ul>
   </div>
 
   <div class="house-section">
     <span class="section-label">Interior</span>
-    <h2 class="display">Original details, <em class="display-italic">thoughtfully kept</em></h2>
-    <p>The original fir floors run through the main living areas, dark from nearly a century of afternoon light. Built-in bookshelves flank the fireplace. Picture rails and crown molding — both original — run through every room.</p>
-    <p>The kitchen was renovated without erasing the house: white Shaker cabinets, Carrara marble counters, a vintage-style range. The back window frames the terraced yard and the hills beyond it.</p>
+    <h2 class="display">Light, space, <em class="display-italic">good bones</em></h2>
+    <p>Hardwood floors run through the living room, one bedroom, entry, and hallway. The living room is cheery — lots of windows, a large skylight overhead, french doors that open directly to the outdoor patio.</p>
+    <p>The kitchen features granite counters and slate backsplash with updated cooktop, oven, and dishwasher. Large dining area with views. New Pella double-pane windows throughout with easy-clean flip design.</p>
   </div>
 
   <div class="house-section">
     <span class="section-label">Primary Suite</span>
-    <h2 class="display">Views from <em class="display-italic">the top</em></h2>
-    <p>The primary bedroom occupies the quietest corner of the house — a hillside room with canyon views east toward the San Gabriels. The ensuite bath has subway tile, a soaking tub, and period fixtures restored rather than replaced.</p>
+    <h2 class="display">The suite <em class="display-italic">that delivers</em></h2>
+    <p>The primary bedroom has outside access to the patio through a Pella sliding door. The ensuite bath features crown molding, wainscoting, a large semi-frameless walk-in shower with jets, marble counters, and a large bay window.</p>
   </div>
 
   <div class="house-section">
     <span class="section-label">Exterior</span>
-    <h2 class="display">The yard is half the house</h2>
-    <p>Three terraced levels step down the hillside behind the house: a dining terrace off the kitchen, a garden level with mature citrus and olive trees, and a lower flat area that gets afternoon sun all year. The front porch runs the full width of the facade.</p>
+    <h2 class="display">The yard is <em class="display-italic">half the house</em></h2>
+    <p>Large open-air patio off the living room french doors — plenty of room for entertaining year round. Large yard with room for a garden, drought tolerant plants, and a slight hill behind the home that adds privacy. Fully enclosed fenced yard. 2-car garage. Security system included.</p>
   </div>
 
   <div class="house-section house-full" style="padding: 3rem 2.5rem;">
     <span class="section-label">The Story</span>
-    <h2 class="display" style="font-size: clamp(2rem, 4vw, 3.5rem); margin-bottom: 1.25rem;">Built in 1928,<br><em class="display-italic">still here for a reason</em></h2>
-    <p style="max-width: 620px; font-size: 0.88rem; line-height: 1.85;">Mount Washington bungalows from this era were built to last — thick plaster walls, old-growth lumber, proportions that hold up across a century of tastes. This one has been cared for by people who understood what they had. The work done here over the years was additive, not subtractive. The result is a house that feels old in the best way: settled, particular, with an ease that newer construction doesn't manufacture.</p>
+    <h2 class="display" style="font-size: clamp(2rem, 4vw, 3.5rem); margin-bottom: 1.25rem;">Built in 1956,<br><em class="display-italic">still here for a reason</em></h2>
+    <p style="max-width: 620px; font-size: 0.88rem; line-height: 1.85;">Mid-Century homes in Mount Washington were built with intention — single level layouts, corner lots, proportions that age well. This one sits on 10,145 sq ft with neighbors only on one side, a hill behind for privacy, and morning light that comes in from every direction. The updates made here over the years respected what was already working. The result is a house that feels grounded: private, light-filled, with room to live in it.</p>
   </div>
 </div>`;
 
   return pageShell({
     title:    `The House — ${config.address.street}, ${config.neighborhood}`,
-    desc:     `3-bedroom 1928 Craftsman bungalow in Mount Washington, Los Angeles. Original hardwood floors, renovated kitchen, hillside yard with canyon views.`,
+    desc:     `3-bedroom 1956 Mid-Century Traditional on a 10,145 sq ft corner lot in Mount Washington, Los Angeles. Hardwood floors, granite kitchen, large patio, master suite with walk-in shower.`,
     url:      `${config.siteUrl}/the-house`,
     current:  '/the-house',
     content,

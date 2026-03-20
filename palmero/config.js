@@ -10,34 +10,35 @@ module.exports = {
   crossNeighborhood: 'Highland Park',
   region:            'NELA',
 
-  // Property details — update before launch
+  // Property details
   price:     '$1,295,000',
   beds:      3,
-  baths:     2,
+  baths:     2.5,
   sqft:      1842,
-  lot:       '6,200 sq ft',
-  yearBuilt: 1928,
+  lot:       '10,145 sq ft',
+  yearBuilt: 1956,
+  garage:    '2-car garage',
 
   // Running ticker items
   tickerItems: [
-    '3 BD / 2 BA',
+    '3 BD / 2.5 BA',
     '1,842 sq ft',
-    'Built 1928',
+    'Built 1956',
     'Mount Washington',
     'Highland Park Adjacent',
     'Los Angeles 90065',
     '$1,295,000',
-    '6,200 sq ft lot',
+    '10,145 sq ft lot',
+    '2-Car Garage',
+    'Corner Lot',
     'NELA',
     'Views',
-    'Craftsman',
-    'Original Details',
   ],
 
   // Giveaway
   smsKeyword:    'PALMERO',
   smsNumber:     '(888) 900-7501',
-  giveawayPrize: 'Win a private tour of the property + dinner for two at a Highland Park restaurant of your choice',
+  giveawayPrize: '$50 gift card to Wild Crust Pizza',
 
   // Site identity
   siteUrl:  'https://4175palmero.textmarco.com',
