@@ -42,8 +42,15 @@ Write a genuine, editorial-quality neighborhood article that:
 - Mentions the property's location area organically (not as a sales pitch)
 - Has a compelling, keyword-rich title
 - Uses 3-4 subheadings (H2 only)
-- Reads like a thoughtful neighborhood blog post
+- Reads like a local who actually lives in the neighborhood is writing it — specific, lived-in, opinionated
 - Has a brief, editorial closing paragraph
+
+IMPORTANT — accuracy rules:
+- Never make specific walkability claims ("walkable to X", "steps from X", "a short walk to X") unless you are completely certain the place is within easy walking distance of Mount Washington / Highland Park
+- Never invent specific street addresses, hours, or prices for businesses
+- Avoid superlatives that could be easily disproven ("best in LA", "most affordable", etc.)
+- Stick to neighborhood character, culture, vibe, and general area knowledge rather than hyper-specific logistical claims
+- If mentioning a specific business or landmark, only do so if you're confident it exists in Highland Park / Mount Washington / NELA
 
 Return ONLY valid JSON in exactly this format, no markdown, no explanation:
 {
