@@ -10,6 +10,8 @@ const TemplateEngine = require('./template-engine');
 const CloudflareDeployer = require('./cloudflare-deployer');
 const palmeroRouter = require('./palmero/routes');
 const { runDailyArticle } = require('./palmero/article-generator');
+const dahliaRouter = require('./dahlia/routes');
+const { runDailyArticle: runDahliaArticle } = require('./dahlia/article-generator');
 
 const templateEngine = new TemplateEngine();
 const deployer = new CloudflareDeployer();
@@ -36,10 +38,14 @@ app.use((req, res, next) => {
   if (req.hostname === '4175palmero.textmarco.com') {
     return palmeroRouter(req, res, next);
   }
+  if (req.hostname === '5142dahlia.textmarco.com') {
+    return dahliaRouter(req, res, next);
+  }
   next();
 });
-// Also accessible at /palmero/* for local testing
+// Also accessible at /palmero/* and /dahlia/* for local testing
 app.use('/palmero', palmeroRouter);
+app.use('/dahlia', dahliaRouter);
 
 // Stripe webhook needs raw body — must come BEFORE express.json()
 app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -378,6 +384,19 @@ async function processState(convo, message, mediaUrl = null) {
       console.error('[PALMERO] Giveaway SMS insert error:', err.message);
     }
     return { response: `You're in the giveaway for 4175 Palmero Dr. We'll be in touch before closing. See the property at 4175palmero.textmarco.com` };
+  }
+
+  // ── Dahlia giveaway keyword ────────────────────────────────────────────────
+  if (message.trim().toUpperCase() === 'DAHLIA') {
+    try {
+      await pool.query(
+        `INSERT INTO dahlia_giveaway (phone, source) VALUES ($1, 'sms') ON CONFLICT (phone) DO NOTHING`,
+        [convo.phone]
+      );
+    } catch (err) {
+      console.error('[DAHLIA] Giveaway SMS insert error:', err.message);
+    }
+    return { response: `You're in the giveaway for 5142 Dahlia Dr. We'll be in touch before closing. See the property at 5142dahlia.textmarco.com` };
   }
 
   // Active (paid) users get full AI Marco with site editing
@@ -1453,11 +1472,36 @@ app.get('/admin/palmero-worker', requireAdminAuth, async (req, res) => {
 
 // Palmero: manually trigger article generation
 app.post('/admin/palmero-article', requireAdminAuth, async (req, res) => {
+  const { generateArticle, getKeywordForDate } = require('./palmero/article-generator');
+  const keyword = req.query.keyword || getKeywordForDate();
   try {
-    const result = await runDailyArticle(pool);
+    const result = await generateArticle(pool, keyword);
     res.json({ ok: true, article: result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, stack: err.stack?.split('\n').slice(0,3) });
+  }
+});
+
+// Dahlia: deploy Cloudflare Worker proxy
+app.get('/admin/dahlia-worker', requireAdminAuth, async (req, res) => {
+  const { run } = require('./dahlia/setup-dns');
+  try {
+    const result = await run();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.response?.data || err.message });
+  }
+});
+
+// Dahlia: manually trigger article generation
+app.post('/admin/dahlia-article', requireAdminAuth, async (req, res) => {
+  const { generateArticle, getKeywordForDate } = require('./dahlia/article-generator');
+  const keyword = req.query.keyword || getKeywordForDate();
+  try {
+    const result = await generateArticle(pool, keyword);
+    res.json({ ok: true, article: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack?.split('\n').slice(0,3) });
   }
 });
 
@@ -1492,6 +1536,22 @@ app.listen(PORT, async () => {
     `);
     console.log('[PALMERO] Tables ready');
   } catch (e) { console.error('[PALMERO] Migration error:', e.message); }
+  // Dahlia tables (idempotent)
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dahlia_giveaway (
+        id SERIAL PRIMARY KEY, phone TEXT NOT NULL,
+        source TEXT DEFAULT 'web', created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS dahlia_giveaway_phone_idx ON dahlia_giveaway (phone);
+      CREATE TABLE IF NOT EXISTS dahlia_articles (
+        id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, keyword TEXT NOT NULL,
+        title TEXT NOT NULL, meta_desc TEXT, body_html TEXT NOT NULL,
+        word_count INTEGER, published_at TIMESTAMPTZ DEFAULT NOW(), created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log('[DAHLIA] Tables ready');
+  } catch (e) { console.error('[DAHLIA] Migration error:', e.message); }
   console.log(`Marco running on port ${PORT} — waitlist: ${waitlistEnabled}`);
 });
 
@@ -1499,6 +1559,12 @@ app.listen(PORT, async () => {
 cron.schedule('0 6 * * *', async () => {
   console.log('[PALMERO] Running daily article generation...');
   await runDailyArticle(pool);
+}, { timezone: 'America/Los_Angeles' });
+
+// Dahlia daily article — 6:05am PT (staggered to avoid concurrent Claude calls)
+cron.schedule('5 6 * * *', async () => {
+  console.log('[DAHLIA] Running daily article generation...');
+  await runDahliaArticle(pool);
 }, { timezone: 'America/Los_Angeles' });
 
 // Run cleanup daily at 3am UTC
