@@ -1,0 +1,4 @@
+name = "dahlia-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+account_id = "c721c342753e40e0a93122e2fe1da628"
