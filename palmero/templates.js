@@ -673,7 +673,7 @@ function theHousePage() {
     <span class="section-label">Exterior</span>
     <h2 class="display">The yard is <em class="display-italic">half the house</em></h2>
     <p>Large open-air patio off the living room french doors — plenty of room for entertaining year round. Large yard with room for a garden, drought tolerant plants, and a slight hill behind the home that adds privacy. Fully enclosed fenced yard. 2-car garage. Security system included.</p>
-    <img src="/palmero/public/yard.jpg" alt="4175 Palmero Dr yard — Mount Washington, Los Angeles" style="width:100%;margin-top:1.5rem;display:block;border:0.5px solid var(--sand);" loading="lazy">
+    <img src="/public/yard.jpg" alt="4175 Palmero Dr yard — Mount Washington, Los Angeles" style="width:100%;margin-top:1.5rem;display:block;border:0.5px solid var(--sand);" loading="lazy">
   </div>
 
   <div class="house-section house-full" style="padding: 3rem 2.5rem;">
