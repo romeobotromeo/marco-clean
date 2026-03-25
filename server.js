@@ -1517,6 +1517,42 @@ app.post('/admin/toggle-waitlist', async (req, res) => {
   res.json({ waitlistEnabled });
 });
 
+// ── Public builds feed ────────────────────────────────────────────────────────
+app.get('/api/builds', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT site_name, site_type, site_url, site_subdomain, is_personal, paid_at, updated_at
+      FROM conversations
+      WHERE site_subdomain IS NOT NULL
+        AND site_url IS NOT NULL
+        AND state NOT IN ('waitlist', 'greeting', 'ask_name', 'ask_type', 'ask_contact', 'building')
+      ORDER BY COALESCE(paid_at, updated_at) DESC
+      LIMIT 30
+    `);
+
+    function relativeTime(date) {
+      if (!date) return '';
+      const diff = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
+      return `${Math.floor(diff / 86400)}d ago`;
+    }
+
+    const builds = result.rows.map(r => ({
+      biz: r.site_name || r.site_subdomain,
+      type: r.site_type || (r.is_personal ? 'Personal' : 'Business'),
+      url: r.site_url,
+      time: relativeTime(r.paid_at || r.updated_at),
+    }));
+
+    res.json(builds);
+  } catch (err) {
+    console.error('/api/builds error:', err.message);
+    res.json([]);
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   await loadWaitlistSetting();

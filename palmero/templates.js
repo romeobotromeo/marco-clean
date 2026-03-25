@@ -509,9 +509,11 @@ ${buildTicker()}
 
 <div class="builder-section">
   <span class="section-label">The Builder</span>
-  <h2 class="display">Wiley — <em class="display-italic">a legacy in concrete and glass</em></h2>
-  <p>4175 Palmero Dr was built by Wiley — a noted, self-taught homebuilder who constructed nearly 1,000 homes across the region from the 1950s through the 1970s, known for their contemporary styling and quality craftsmanship. This home is a product of that legacy.</p>
+  <h2 class="display">Webster G. Wiley — <em class="display-italic">a legacy in concrete and glass</em></h2>
+  <p>4175 Palmero Dr was built by Webster G. Wiley — a noted, self-taught homebuilder who constructed nearly 1,000 homes across the region from the 1950s through the 1970s, known for their contemporary styling and quality craftsmanship. This home is a product of that legacy.</p>
 </div>
+
+<img src="/public/drawing.png" alt="4175 Palmero Dr — architectural drawing" style="width:100%;display:block;border-top:0.5px solid var(--sand);border-bottom:0.5px solid var(--sand);" loading="lazy">
 
 <hr class="divider">
 
@@ -674,7 +676,8 @@ function theHousePage() {
   <div class="house-section">
     <span class="section-label">Exterior</span>
     <h2 class="display">The yard is <em class="display-italic">half the house</em></h2>
-    <p>Large open-air patio off the living room french doors — plenty of room for entertaining year round. Large yard with room for a garden, drought tolerant plants, and a slight hill behind the home that adds privacy. Fully enclosed fenced yard. 2-car garage. Security system included.</p>
+    <p>The rear grounds are a genuine outdoor living environment — an open-air patio off the french doors anchors the entertaining space, with a raised upper deck offering views and a natural second lounge area. A hill along the back of the property adds privacy and visual depth.</p>
+    <p>Five fruit-bearing trees are established on the lot: apple, pomegranate, orange, lemon, and fig. The fence line is planted with drought-tolerant edible and medicinal herbs — sage, rosemary, lavender, geranium, and thyme. Three raised garden beds have supported arugula, kale, and tomatoes. The lot is fully enclosed and fenced.</p>
     <img src="/public/yard.jpg" alt="4175 Palmero Dr yard — Mount Washington, Los Angeles" style="width:100%;margin-top:1.5rem;display:block;border:0.5px solid var(--sand);" loading="lazy">
   </div>
 

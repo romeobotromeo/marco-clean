@@ -524,6 +524,10 @@ function theHousePage() {
     <p style="max-width: 620px; font-size: 0.88rem; line-height: 1.85;">On May 27, 1926, contractor and designer W.W. Boyle pulled a permit for a new 5-room residence on Dahlia Drive — Lot 25 of the Dahlgreen Tract. The original construction cost was $4,000, a premium price at the time, signaling this was built for an upper-middle-class buyer. The original materials: redwood mudsills, brick chimneys, cedar shingle roof. The first owner was E.E. Andrews.</p>
     <p style="max-width: 620px; font-size: 0.88rem; line-height: 1.85; margin-top: 1rem;">The Dahlgreen Tract was part of Eagle Rock's "Hillside Retreat" movement — subdivisions designed to offer views and clean air away from the city center. Boyle likely developed several lots on the block simultaneously, creating a cohesive village feel that still exists today. The property is noted in historic surveys as potentially eligible for the National Register due to its intact 1920s character.</p>
     <p style="max-width: 620px; font-size: 0.88rem; line-height: 1.85; margin-top: 1rem;">Nearly a century later, Gibson House brought it fully into the present — without erasing any of it.</p>
+    <div style="margin-top: 2.5rem; max-width: 380px;">
+      <img src="/public/permit-1926.png" alt="Original 1926 building permit — 5142 Dahlia Dr" style="width: 100%; border: 0.5px solid var(--sand); display: block;">
+      <p style="font-size: 0.72rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.6rem;">Original building permit — May 27, 1926 · Permit No. 15987</p>
+    </div>
   </div>
 </div>`;
 
