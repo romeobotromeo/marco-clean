@@ -1517,6 +1517,22 @@ app.post('/admin/toggle-waitlist', async (req, res) => {
   res.json({ waitlistEnabled });
 });
 
+// ── Giveaway entries ──────────────────────────────────────────────────────────
+app.get('/admin/giveaways', async (req, res) => {
+  try {
+    const [palmero, dahlia] = await Promise.all([
+      pool.query(`SELECT phone, source, entered_at FROM palmero_giveaway ORDER BY entered_at DESC`),
+      pool.query(`SELECT phone, source, entered_at FROM dahlia_giveaway ORDER BY entered_at DESC`),
+    ]);
+    res.json({
+      palmero: { count: palmero.rows.length, entries: palmero.rows },
+      dahlia:  { count: dahlia.rows.length,  entries: dahlia.rows  },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Public builds feed ────────────────────────────────────────────────────────
 app.get('/api/builds', async (req, res) => {
   try {
