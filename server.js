@@ -1521,8 +1521,8 @@ app.post('/admin/toggle-waitlist', async (req, res) => {
 app.get('/admin/giveaways', async (req, res) => {
   try {
     const [palmero, dahlia] = await Promise.all([
-      pool.query(`SELECT phone, source, entered_at FROM palmero_giveaway ORDER BY entered_at DESC`),
-      pool.query(`SELECT phone, source, entered_at FROM dahlia_giveaway ORDER BY entered_at DESC`),
+      pool.query(`SELECT phone, source, created_at FROM palmero_giveaway ORDER BY created_at DESC`),
+      pool.query(`SELECT phone, source, created_at FROM dahlia_giveaway ORDER BY created_at DESC`),
     ]);
     res.json({
       palmero: { count: palmero.rows.length, entries: palmero.rows },
