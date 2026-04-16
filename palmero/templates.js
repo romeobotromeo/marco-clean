@@ -378,12 +378,36 @@ function homePage() {
   margin-top: 0.5rem;
 }
 
+/* Photo grid */
+.photo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 0.5px solid var(--sand);
+}
+.photo-grid img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+}
+.photo-grid img:nth-child(odd) {
+  border-right: 0.5px solid var(--sand);
+}
+.photo-grid img:nth-child(3),
+.photo-grid img:nth-child(4) {
+  border-top: 0.5px solid var(--sand);
+}
+
 @media (max-width: 768px) {
   .hero { grid-template-columns: 1fr; padding: 3rem 1.25rem 2.5rem; }
   .stats-strip { grid-template-columns: repeat(2, 1fr); }
   .stat-cell:nth-child(2) { border-right: none; }
   .page-previews { grid-template-columns: 1fr; }
   .preview-link { border-right: none; border-bottom: 0.5px solid var(--sand); }
+  .photo-grid { grid-template-columns: 1fr; }
+  .photo-grid img:nth-child(odd) { border-right: none; }
+  .photo-grid img { border-top: 0.5px solid var(--sand); border-right: none !important; }
+  .photo-grid img:first-child { border-top: none; }
 }`;
 
   const content = `
@@ -466,7 +490,12 @@ ${buildTicker()}
   </a>
 </div>
 
-<img src="/public/yard.jpg" alt="4175 Palmero Dr — Mount Washington garden" style="width:100%;display:block;border-top:0.5px solid var(--sand);" loading="lazy">`;
+<div class="photo-grid">
+  <img src="/public/exterior.jpg" alt="4175 Palmero Dr — exterior" loading="lazy">
+  <img src="/public/living.jpg"   alt="4175 Palmero Dr — living room" loading="lazy">
+  <img src="/public/patio.jpg"    alt="4175 Palmero Dr — patio" loading="lazy">
+  <img src="/public/dining.jpg"   alt="4175 Palmero Dr — dining room" loading="lazy">
+</div>`;
 
   return pageShell({
     title:    `${config.address.street} — ${config.neighborhood}, Los Angeles`,
