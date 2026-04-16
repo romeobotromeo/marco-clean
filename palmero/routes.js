@@ -12,28 +12,7 @@ const config   = require('./config');
 
 // ── Homepage ──────────────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
-  const success = req.query.entered === '1';
-  res.send(T.homePage({ success }));
-});
-
-// ── Giveaway form POST ────────────────────────────────────────────────────────
-router.post('/giveaway', async (req, res) => {
-  const raw   = (req.body?.phone || '').replace(/\D/g, '');
-  const phone = raw.length === 10 ? `+1${raw}` : raw.length === 11 && raw[0] === '1' ? `+${raw}` : null;
-
-  if (phone) {
-    try {
-      const pool = req.app.get('pool');
-      await pool.query(
-        `INSERT INTO palmero_giveaway (phone, source) VALUES ($1, 'web') ON CONFLICT (phone) DO NOTHING`,
-        [phone]
-      );
-    } catch (err) {
-      console.error('[PALMERO] Giveaway insert error:', err.message);
-    }
-  }
-
-  res.redirect('/?entered=1#giveaway');
+  res.send(T.homePage());
 });
 
 // ── Static pages ──────────────────────────────────────────────────────────────

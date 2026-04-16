@@ -196,7 +196,6 @@ function buildNav(current = '') {
   <a href="/" class="wordmark">4175 PALMERO</a>
   <div class="nav-links">
     ${links.map(l => `<a href="${l.href}"${current === l.href ? ' class="active"' : ''}>${l.label}</a>`).join('\n    ')}
-    <a href="/#giveaway" class="nav-cta">ENTER GIVEAWAY</a>
   </div>
 </nav>`;
 }
@@ -240,7 +239,7 @@ ${buildFooter()}
 
 // ── Homepage ──────────────────────────────────────────────────────────────────
 
-function homePage({ success = false } = {}) {
+function homePage() {
   const css = `
 .hero {
   padding: 5rem 2.5rem 4rem;
@@ -345,65 +344,6 @@ function homePage({ success = false } = {}) {
   margin-top: 0.35rem;
 }
 
-/* Giveaway */
-.giveaway {
-  padding: 4rem 2.5rem;
-  max-width: 1160px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4rem;
-  align-items: start;
-}
-.giveaway-text h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 300;
-  font-size: clamp(2rem, 4vw, 3rem);
-  line-height: 1.1;
-  margin-bottom: 1rem;
-}
-.giveaway-text p {
-  font-size: 0.82rem;
-  color: var(--muted);
-  line-height: 1.7;
-  margin-bottom: 1.5rem;
-}
-.giveaway-form-wrap {}
-.form-row { display: flex; gap: 0; }
-.form-row input { flex: 1; }
-.form-row button {
-  flex-shrink: 0;
-  padding: 0.7rem 1.5rem;
-  font-family: 'DM Mono', monospace;
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  font-weight: 400;
-  background: var(--terracotta);
-  color: var(--cream);
-  border: none;
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: background 0.15s;
-}
-.form-row button:hover { background: var(--dark); }
-.sms-alt {
-  font-size: 0.72rem;
-  color: var(--muted);
-  margin-top: 1rem;
-  letter-spacing: 0.04em;
-}
-.sms-keyword {
-  font-weight: 400;
-  color: var(--terracotta);
-  letter-spacing: 0.1em;
-}
-.success-msg {
-  font-size: 0.82rem;
-  color: var(--terracotta);
-  padding: 0.75rem 0;
-  letter-spacing: 0.06em;
-}
-
 /* Preview links */
 .page-previews {
   border-top: 0.5px solid var(--sand);
@@ -442,18 +382,9 @@ function homePage({ success = false } = {}) {
   .hero { grid-template-columns: 1fr; padding: 3rem 1.25rem 2.5rem; }
   .stats-strip { grid-template-columns: repeat(2, 1fr); }
   .stat-cell:nth-child(2) { border-right: none; }
-  .giveaway { grid-template-columns: 1fr; gap: 2rem; padding: 3rem 1.25rem; }
   .page-previews { grid-template-columns: 1fr; }
   .preview-link { border-right: none; border-bottom: 0.5px solid var(--sand); }
 }`;
-
-  const giveawayForm = success
-    ? `<p class="success-msg">You're in. We'll be in touch.</p>`
-    : `<div class="form-row">
-        <input type="tel" name="phone" placeholder="(323) 555-0100" required>
-        <button type="submit">ENTER</button>
-      </div>
-      <p class="sms-alt">Or text <span class="sms-keyword">PALMERO</span> to ${config.smsNumber}</p>`;
 
   const content = `
 ${buildTicker()}
@@ -514,23 +445,6 @@ ${buildTicker()}
 </div>
 
 <img src="/public/drawing.png" alt="4175 Palmero Dr — architectural drawing" style="width:100%;display:block;border-top:0.5px solid var(--sand);border-bottom:0.5px solid var(--sand);" loading="lazy">
-
-<hr class="divider">
-
-<div class="giveaway" id="giveaway">
-  <div class="giveaway-text">
-    <span class="section-label">Giveaway</span>
-    <h2 class="display">Win a<br><em class="display-italic">${config.giveawayPrize}</em></h2>
-    <p>Enter your number for a chance to win. We'll announce the winner before closing.</p>
-    <p>Enter your number below or text <strong>${config.smsKeyword}</strong> to ${config.smsNumber}. We'll announce the winner before closing.</p>
-  </div>
-  <div class="giveaway-form-wrap">
-    <span class="section-label">Enter now</span>
-    <form action="/giveaway" method="POST">
-      ${giveawayForm}
-    </form>
-  </div>
-</div>
 
 <hr class="divider">
 
@@ -1054,7 +968,7 @@ function articlePage(article) {
     <div class="article-cta">
       <h3 class="display">4175 Palmero Dr</h3>
       <p>${config.neighborhood}, Los Angeles · ${config.beds} BD / ${config.baths} BA · Coming Soon</p>
-      <a href="/#giveaway" class="btn btn-terracotta" style="margin-top:1rem;">Enter the Giveaway</a>
+      <a href="/" class="btn btn-terracotta" style="margin-top:1rem;">View the Home</a>
     </div>
   </div>
 </div>`;
