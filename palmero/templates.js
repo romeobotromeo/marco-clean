@@ -626,6 +626,7 @@ function theHousePage() {
     <h2 class="display">Light, space, <em class="display-italic">good bones</em></h2>
     <p>Hardwood floors run through the living room, one bedroom, entry, and hallway. The living room is cheery — lots of windows, a large skylight overhead, french doors that open directly to the outdoor patio.</p>
     <p>The kitchen features granite counters and slate backsplash with updated cooktop, oven, and dishwasher. Large dining area with views. New Pella double-pane windows throughout with easy-clean flip design.</p>
+    <p>Interior light refresh designed by <a href="https://www.gibsonhouse.co" target="_blank" rel="noopener" style="color:var(--terracotta);text-decoration:none;">Gibson House</a>.</p>
   </div>
 
   <div class="house-section">
@@ -645,7 +646,7 @@ function theHousePage() {
   <div class="house-section house-full" style="padding: 3rem 2.5rem;">
     <span class="section-label">The Story</span>
     <h2 class="display" style="font-size: clamp(2rem, 4vw, 3.5rem); margin-bottom: 1.25rem;">Built in 1956,<br><em class="display-italic">still here for a reason</em></h2>
-    <p style="max-width: 620px; font-size: 0.88rem; line-height: 1.85;">Mid-Century homes in Mount Washington were built with intention — single level layouts, corner lots, proportions that age well. This one sits on 10,145 sq ft with neighbors only on one side, a hill behind for privacy, and morning light that comes in from every direction. The updates made here over the years respected what was already working. The result is a house that feels grounded: private, light-filled, with room to live in it.</p>
+    <p style="max-width: 620px; font-size: 0.88rem; line-height: 1.85;">Mid-Century homes in Mount Washington were built with intention — single level layouts, corner lots, proportions that age well. This one sits on 11,750 sq ft with neighbors only on one side, a hill behind for privacy, and morning light that comes in from every direction. The updates made here over the years respected what was already working. The result is a house that feels grounded: private, light-filled, with room to live in it.</p>
   </div>
 </div>`;
 
@@ -681,7 +682,7 @@ function theHousePage() {
 
   return pageShell({
     title:    `The House — ${config.address.street}, ${config.neighborhood}`,
-    desc:     `3-bedroom 1956 Mid-Century Traditional on a 10,145 sq ft corner lot in Mount Washington, Los Angeles. Hardwood floors, granite kitchen, large patio, master suite with walk-in shower.`,
+    desc:     `3-bedroom 1956 Mid-Century Traditional on a 11,750 sq ft corner lot in Mount Washington, Los Angeles. Hardwood floors, granite kitchen, large patio, master suite with walk-in shower.`,
     url:      `${config.siteUrl}/the-house`,
     current:  '/the-house',
     content:  contentWithGallery,

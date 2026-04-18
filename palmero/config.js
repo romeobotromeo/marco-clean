@@ -15,7 +15,7 @@ module.exports = {
   beds:      3,
   baths:     2.5,
   sqft:      1536,
-  lot:       '10,145 sq ft',
+  lot:       '11,750 sq ft',
   yearBuilt: 1956,
   garage:    '2-car garage',
 
@@ -28,7 +28,7 @@ module.exports = {
     'Highland Park Adjacent',
     'Los Angeles 90065',
     '$1,295,000',
-    '10,145 sq ft lot',
+    '11,750 sq ft lot',
     '2-Car Garage',
     'Corner Lot',
     'NELA',
