@@ -1114,6 +1114,80 @@ app.post('/waitlist', async (req, res) => {
   }
 });
 
+// ── Marco.com waitlist (from landing page worker) ─────────────────────────────
+app.post('/marco-waitlist', async (req, res) => {
+  const raw   = (req.body?.phone || '').replace(/\D/g, '');
+  const phone = raw.length === 10 ? `+1${raw}` : raw.length === 11 && raw[0] === '1' ? `+${raw}` : null;
+  if (!phone) return res.status(400).json({ error: 'invalid phone' });
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS marco_waitlist (
+        id         SERIAL PRIMARY KEY,
+        phone      TEXT UNIQUE NOT NULL,
+        joined_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(
+      `INSERT INTO marco_waitlist (phone) VALUES ($1) ON CONFLICT (phone) DO NOTHING`,
+      [phone]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[MARCO WAITLIST]', err.message);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
+app.get('/admin/marco-waitlist', async (req, res) => {
+  const fmt = req.query.format;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS marco_waitlist (
+        id         SERIAL PRIMARY KEY,
+        phone      TEXT UNIQUE NOT NULL,
+        joined_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await pool.query(
+      `SELECT phone, joined_at FROM marco_waitlist ORDER BY joined_at DESC`
+    );
+
+    if (fmt === 'csv') {
+      const csv = ['phone,joined_at', ...rows.map(r => `${r.phone},${r.joined_at.toISOString()}`)].join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="marco-waitlist.csv"');
+      return res.send(csv);
+    }
+
+    const rows_html = rows.map(r =>
+      `<tr><td>${escHtml(r.phone)}</td><td>${new Date(r.joined_at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}</td></tr>`
+    ).join('');
+
+    res.send(`<!DOCTYPE html><html><head><title>Marco Waitlist</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body { font-family: -apple-system, sans-serif; background: #0a0a0a; color: #e8e8f0; padding: 2rem; margin: 0; }
+  h1 { font-size: 1.1rem; font-weight: 500; letter-spacing: 0.1em; color: #e8e8f0; margin-bottom: 0.25rem; }
+  .meta { font-size: 0.75rem; color: #666; margin-bottom: 1.5rem; }
+  a.export { font-size: 0.72rem; color: #7864ff; text-decoration: none; letter-spacing: 0.05em; }
+  table { border-collapse: collapse; width: 100%; max-width: 560px; }
+  th { font-size: 0.62rem; letter-spacing: 0.12em; color: #555; text-transform: uppercase; text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #222; }
+  td { font-size: 0.82rem; padding: 0.6rem 0.75rem; border-bottom: 1px solid #1a1a1a; color: #ccc; }
+  tr:hover td { background: #111; }
+  .empty { color: #444; font-size: 0.82rem; margin-top: 1rem; }
+</style></head><body>
+<h1>Marco Waitlist</h1>
+<p class="meta">${rows.length} signup${rows.length !== 1 ? 's' : ''} &nbsp;·&nbsp; <a class="export" href="?format=csv&secret=${escHtml(req.query.secret || '')}">Download CSV</a></p>
+<table><thead><tr><th>Phone</th><th>Joined</th></tr></thead><tbody>
+${rows_html || '<tr><td colspan="2" class="empty">No signups yet.</td></tr>'}
+</tbody></table>
+</body></html>`);
+  } catch (err) {
+    console.error('[MARCO WAITLIST ADMIN]', err.message);
+    res.status(500).send('Error');
+  }
+});
+
 app.get('/dashboard', async (req, res) => {
   try {
     const customers = (await pool.query('SELECT * FROM customers ORDER BY created_at DESC')).rows;
