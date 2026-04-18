@@ -575,10 +575,28 @@ function theHousePage() {
   grid-column: 1 / -1;
   border-right: none;
 }
+/* Photo gallery */
+.photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 0.5px solid var(--sand);
+}
+.photo-gallery img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-right: 0.5px solid var(--sand);
+  border-bottom: 0.5px solid var(--sand);
+}
+.photo-gallery img:nth-child(3n) { border-right: none; }
 @media (max-width: 768px) {
   .house-hero { padding: 3rem 1.25rem 2.5rem; }
   .house-grid { grid-template-columns: 1fr; }
   .house-section { border-right: none; }
+  .photo-gallery { grid-template-columns: repeat(2, 1fr); }
+  .photo-gallery img:nth-child(3n) { border-right: 0.5px solid var(--sand); }
+  .photo-gallery img:nth-child(2n) { border-right: none; }
 }`;
 
   const content = `
@@ -621,7 +639,7 @@ function theHousePage() {
     <h2 class="display">The yard is <em class="display-italic">half the house</em></h2>
     <p>The rear grounds are a genuine outdoor living environment — an open-air patio off the french doors anchors the entertaining space, with a raised upper deck offering views and a natural second lounge area. A hill along the back of the property adds privacy and visual depth.</p>
     <p>Five fruit-bearing trees are established on the lot: apple, pomegranate, orange, lemon, and fig. The fence line is planted with drought-tolerant edible and medicinal herbs — sage, rosemary, lavender, geranium, and thyme. Three raised garden beds have supported arugula, kale, and tomatoes. The lot is fully enclosed and fenced.</p>
-    <img src="/public/yard.jpg" alt="4175 Palmero Dr yard — Mount Washington, Los Angeles" style="width:100%;margin-top:1.5rem;display:block;border:0.5px solid var(--sand);" loading="lazy">
+    <img src="/public/patio-wide.jpg" alt="4175 Palmero Dr yard — Mount Washington, Los Angeles" style="width:100%;margin-top:1.5rem;display:block;border:0.5px solid var(--sand);" loading="lazy">
   </div>
 
   <div class="house-section house-full" style="padding: 3rem 2.5rem;">
@@ -631,12 +649,42 @@ function theHousePage() {
   </div>
 </div>`;
 
+  const gallery = [
+    ['/public/exterior.jpg',      '4175 Palmero Dr — exterior'],
+    ['/public/living.jpg',        'Living room'],
+    ['/public/living-2.jpg',      'Living room'],
+    ['/public/patio.jpg',         'Patio'],
+    ['/public/living-3.jpg',      'Living room'],
+    ['/public/dining.jpg',        'Dining room'],
+    ['/public/kitchen-dining.jpg','Kitchen and dining'],
+    ['/public/kitchen.jpg',       'Kitchen'],
+    ['/public/laundry.jpg',       'Laundry room'],
+    ['/public/powder.jpg',        'Powder room'],
+    ['/public/kitchen-sink.jpg',  'Kitchen'],
+    ['/public/bed-3.jpg',         'Bedroom'],
+    ['/public/primary-bed.jpg',   'Primary bedroom'],
+    ['/public/primary-bath.jpg',  'Primary bathroom'],
+    ['/public/bed-4.jpg',         'Bedroom'],
+    ['/public/bed-2.jpg',         'Bedroom'],
+    ['/public/bath-2.jpg',        'Bathroom'],
+    ['/public/patio-lounge.jpg',  'Patio lounge'],
+    ['/public/aerial.jpg',        'Aerial view'],
+    ['/public/patio-wide.jpg',    'Patio'],
+    ['/public/garden.jpg',        'Garden'],
+    ['/public/yard-grassy.jpg',   'Yard'],
+    ['/public/trailer.jpg',       'Vintage trailer'],
+    ['/public/yard-2.jpg',        'Yard'],
+    ['/public/entry.jpg',         'Entry'],
+  ].map(([src, alt]) => `<img src="${src}" alt="${alt}" loading="lazy">`).join('');
+
+  const contentWithGallery = content + `\n<div class="photo-gallery">${gallery}</div>`;
+
   return pageShell({
     title:    `The House — ${config.address.street}, ${config.neighborhood}`,
     desc:     `3-bedroom 1956 Mid-Century Traditional on a 10,145 sq ft corner lot in Mount Washington, Los Angeles. Hardwood floors, granite kitchen, large patio, master suite with walk-in shower.`,
     url:      `${config.siteUrl}/the-house`,
     current:  '/the-house',
-    content,
+    content:  contentWithGallery,
     extraCss: css,
   });
 }
