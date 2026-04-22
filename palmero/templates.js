@@ -197,7 +197,13 @@ function buildNav(current = '') {
   <div class="nav-links">
     ${links.map(l => `<a href="${l.href}"${current === l.href ? ' class="active"' : ''}>${l.label}</a>`).join('\n    ')}
   </div>
-</nav>`;
+</nav>
+<div style="border-bottom:0.5px solid var(--sand);padding:0.55rem 2.5rem;display:flex;align-items:center;gap:1.5rem;font-size:0.62rem;letter-spacing:0.1em;color:var(--muted);">
+  <span>Listed by</span>
+  <span style="color:var(--ink);font-weight:400;">Joshua Wynn Gibson</span>
+  <span>·</span>
+  <a href="tel:3102951136" style="color:var(--ink);font-weight:400;">310-295-1136</a>
+</div>`;
 }
 
 function buildFooter() {
@@ -422,7 +428,7 @@ ${buildTicker()}
   <div class="hero-meta">
     <div>
       <span class="section-label">Listing Price</span>
-      <div class="hero-price display" style="font-size:clamp(1.2rem,3vw,2rem); letter-spacing:0.15em;">COMING SOON</div>
+      <div class="hero-price display" style="font-size:clamp(1.2rem,3vw,2rem); letter-spacing:0.15em;">$1,295,000</div>
     </div>
     <hr class="hero-divider">
     <div class="hero-specs">
