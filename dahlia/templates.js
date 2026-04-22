@@ -271,6 +271,20 @@ function homePage() {
   .preview-label { font-size: 0.6rem; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; }
   .preview-title { font-size: clamp(1.5rem, 3vw, 2.25rem); }
   .preview-arrow { font-size: 0.75rem; color: var(--muted); transition: transform 0.2s; margin-top: auto; }
+  .photo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-top: 0.5px solid var(--sand);
+  }
+  .photo-grid img {
+    width: 100%;
+    display: block;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-right: 0.5px solid var(--sand);
+    border-bottom: 0.5px solid var(--sand);
+  }
+  .photo-grid img:nth-child(3n) { border-right: none; }
   @media (max-width: 768px) {
     .hero { grid-template-columns: 1fr; min-height: auto; }
     .hero-left { border-right: none; border-bottom: 0.5px solid var(--sand); padding: 2.5rem 1.25rem; }
@@ -280,6 +294,9 @@ function homePage() {
     .page-previews { grid-template-columns: 1fr; }
     .preview-link { border-right: none; border-bottom: 0.5px solid var(--sand); padding: 2rem 1.25rem; }
     .builder-section { padding: 2.5rem 1.25rem; }
+    .photo-grid { grid-template-columns: 1fr 1fr; }
+    .photo-grid img:nth-child(3n) { border-right: 0.5px solid var(--sand); }
+    .photo-grid img:nth-child(2n) { border-right: none; }
   }
   `;
 
@@ -358,6 +375,15 @@ function homePage() {
     <span class="preview-title display">Area Guide</span>
     <span class="preview-arrow">Read →</span>
   </a>
+</div>
+
+<div class="photo-grid">
+  <img src="/public/living-open.jpg"    alt="5142 Dahlia Dr — living room open to patio" loading="lazy">
+  <img src="/public/pool.jpg"           alt="5142 Dahlia Dr — pool with cypress trees" loading="lazy">
+  <img src="/public/kitchen.jpg"        alt="5142 Dahlia Dr — kitchen" loading="lazy">
+  <img src="/public/den.jpg"            alt="5142 Dahlia Dr — den" loading="lazy">
+  <img src="/public/living-sconces.jpg" alt="5142 Dahlia Dr — living room" loading="lazy">
+  <img src="/public/bedroom.jpg"        alt="5142 Dahlia Dr — bedroom" loading="lazy">
 </div>`;
 
   return pageShell({
