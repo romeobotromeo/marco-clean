@@ -404,6 +404,9 @@ function homePage() {
   border-top: 0.5px solid var(--sand);
 }
 
+.agent-block {
+  display: none;
+}
 @media (max-width: 768px) {
   .hero { grid-template-columns: 1fr; padding: 3rem 1.25rem 2.5rem; }
   .stats-strip { grid-template-columns: repeat(2, 1fr); }
@@ -414,6 +417,7 @@ function homePage() {
   .photo-grid img:nth-child(odd) { border-right: none; }
   .photo-grid img { border-top: 0.5px solid var(--sand); border-right: none !important; }
   .photo-grid img:first-child { border-top: none; }
+  .agent-block { display: block; padding: 2rem 1.25rem; border-top: 0.5px solid var(--sand); }
 }`;
 
   const content = `
@@ -472,6 +476,13 @@ ${buildTicker()}
   <span class="section-label">The Builder</span>
   <h2 class="display">Webster G. Wiley — <em class="display-italic">a legacy in concrete and glass</em></h2>
   <p>4175 Palmero Dr was built by Webster G. Wiley — a noted, self-taught homebuilder who constructed nearly 1,000 homes across the region from the 1950s through the 1970s, known for their contemporary styling and quality craftsmanship. This home is a product of that legacy.</p>
+</div>
+
+<div class="agent-block">
+  <span class="section-label">Presented by</span>
+  <p style="font-size:0.88rem; font-weight:400; margin-bottom:0.35rem;">Joshua Wynn Gibson</p>
+  <p style="font-size:0.75rem; color:var(--muted);">DRE: 02204427</p>
+  <a href="tel:3102951136" style="display:inline-block; margin-top:0.5rem; font-size:0.75rem; color:var(--ink); border-bottom:0.5px solid var(--sand);">310-295-1136</a>
 </div>
 
 <img src="/public/drawing.png" alt="4175 Palmero Dr — architectural drawing" style="width:100%;display:block;border-top:0.5px solid var(--sand);border-bottom:0.5px solid var(--sand);" loading="lazy">
