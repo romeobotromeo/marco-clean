@@ -186,7 +186,7 @@ function pageShell({ title, desc, url, current, content, extraCss = '' }) {
 }
 
 // ── Homepage ───────────────────────────────────────────────────────────────────
-function homePage({ success = false } = {}) {
+function homePage() {
   const css = `
   .hero {
     display: grid;
@@ -231,14 +231,6 @@ function homePage({ success = false } = {}) {
     text-transform: uppercase;
   }
   .hero-sub { font-size: 0.65rem; color: var(--muted); margin-top: 1rem; }
-  .success-banner {
-    background: var(--moss);
-    color: var(--cream);
-    padding: 0.75rem 1rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    text-align: center;
-  }
   .stats-strip {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -261,42 +253,6 @@ function homePage({ success = false } = {}) {
   .builder-section {
     padding: 3rem 2.5rem;
     max-width: 680px;
-  }
-  .giveaway {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-top: 0.5px solid var(--sand);
-    border-bottom: 0.5px solid var(--sand);
-  }
-  .giveaway-text {
-    padding: 3rem 2.5rem;
-    border-right: 0.5px solid var(--sand);
-  }
-  .giveaway-text p { font-size: 0.78rem; margin-top: 1rem; color: var(--muted); line-height: 1.8; }
-  .giveaway-form-wrap { padding: 3rem 2.5rem; }
-  .giveaway-input {
-    width: 100%;
-    border: 0.5px solid var(--sand);
-    background: transparent;
-    padding: 0.85rem 1rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.82rem;
-    color: var(--ink);
-    margin-bottom: 0.75rem;
-    outline: none;
-  }
-  .giveaway-input:focus { border-color: var(--ink); }
-  .giveaway-btn {
-    width: 100%;
-    background: var(--ink);
-    color: var(--cream);
-    border: none;
-    padding: 0.85rem 1rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    cursor: pointer;
   }
   .page-previews {
     display: grid;
@@ -321,22 +277,13 @@ function homePage({ success = false } = {}) {
     .hero-right { padding: 2.5rem 1.25rem; }
     .stats-strip { grid-template-columns: repeat(2, 1fr); }
     .stat-cell:nth-child(2) { border-right: none; }
-    .giveaway { grid-template-columns: 1fr; }
-    .giveaway-text { border-right: none; border-bottom: 0.5px solid var(--sand); padding: 2.5rem 1.25rem; }
-    .giveaway-form-wrap { padding: 2.5rem 1.25rem; }
     .page-previews { grid-template-columns: 1fr; }
     .preview-link { border-right: none; border-bottom: 0.5px solid var(--sand); padding: 2rem 1.25rem; }
     .builder-section { padding: 2.5rem 1.25rem; }
   }
   `;
 
-  const giveawayForm = success
-    ? `<p style="font-size:0.78rem;color:var(--moss);padding:1rem 0;">You're in. We'll be in touch before closing.</p>`
-    : `<input class="giveaway-input" type="tel" name="phone" placeholder="Your phone number" required>
-       <button class="giveaway-btn" type="submit">Enter Giveaway</button>`;
-
   const content = `
-${success ? `<div class="success-banner">YOU'RE IN — WE'LL BE IN TOUCH BEFORE CLOSING</div>` : ''}
 <div class="hero">
   <div class="hero-left">
     <span class="section-label">5142 Dahlia Dr — ${config.neighborhood}</span>
@@ -391,23 +338,6 @@ ${success ? `<div class="success-banner">YOU'RE IN — WE'LL BE IN TOUCH BEFORE 
   <h2 class="display">Gibson House — <em class="display-italic">designed to last</em></h2>
   <p style="font-size:0.82rem; color:var(--muted); line-height:1.85; margin-top:1rem;">Originally built in 1926 by W.W. Boyle for first owner E.E. Andrews — Lot 25 of the historic Dahlgreen Tract. Boyle operated out of a prestigious address on W. 7th Street and built several homes on this block simultaneously to create the cohesive village feel that still defines the street today.</p>
   <p style="font-size:0.82rem; color:var(--muted); line-height:1.85; margin-top:0.85rem;">Nearly a century later, Gibson House — a notable local design firm with luxury projects from Venice Beach to Pasadena — transformed the outdoor space: a deck off the kitchen, large travertine patio, Mediterranean landscaping, 25-foot cypress hedges, multiple olive trees, and a pool beside a vibrant orchard through a DG meditation garden.</p>
-</div>
-
-<hr class="divider">
-
-<div class="giveaway" id="giveaway">
-  <div class="giveaway-text">
-    <span class="section-label">Giveaway</span>
-    <h2 class="display">Win a<br><em class="display-italic">${config.giveawayPrize}</em></h2>
-    <p>Enter your number for a chance to win. We'll announce the winner before closing.</p>
-    <p>Or text <strong>${config.smsKeyword}</strong> to ${config.smsNumber}.</p>
-  </div>
-  <div class="giveaway-form-wrap">
-    <span class="section-label">Enter now</span>
-    <form action="/giveaway" method="POST">
-      ${giveawayForm}
-    </form>
-  </div>
 </div>
 
 <hr class="divider">

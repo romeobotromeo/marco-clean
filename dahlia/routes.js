@@ -11,27 +11,7 @@ const T      = require('./templates');
 const config = require('./config');
 
 router.get('/', (req, res) => {
-  const success = req.query.entered === '1';
-  res.send(T.homePage({ success }));
-});
-
-router.post('/giveaway', async (req, res) => {
-  const raw   = (req.body?.phone || '').replace(/\D/g, '');
-  const phone = raw.length === 10 ? `+1${raw}` : raw.length === 11 && raw[0] === '1' ? `+${raw}` : null;
-
-  if (phone) {
-    try {
-      const pool = req.app.get('pool');
-      await pool.query(
-        `INSERT INTO dahlia_giveaway (phone, source) VALUES ($1, 'web') ON CONFLICT (phone) DO NOTHING`,
-        [phone]
-      );
-    } catch (err) {
-      console.error('[DAHLIA] Giveaway insert error:', err.message);
-    }
-  }
-
-  res.redirect('/?entered=1#giveaway');
+  res.send(T.homePage());
 });
 
 router.get('/the-house', (req, res) => {
