@@ -278,9 +278,8 @@ function homePage() {
   }
   .photo-grid img {
     width: 100%;
+    height: auto;
     display: block;
-    aspect-ratio: 4/3;
-    object-fit: cover;
     border-right: 0.5px solid var(--sand);
     border-bottom: 0.5px solid var(--sand);
   }
