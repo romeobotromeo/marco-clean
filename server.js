@@ -342,7 +342,7 @@ async function getOrCreateConversation(phone) {
 
   const result = await pool.query('SELECT * FROM conversations WHERE phone = $1', [phone]);
   if (result.rows.length > 0) return result.rows[0];
-  const newState = waitlistEnabled ? 'waitlist' : 'greeting';
+  const newState = 'greeting';
   const insert = await pool.query(
     'INSERT INTO conversations (phone, state) VALUES ($1, $2) RETURNING *',
     [phone, newState]
