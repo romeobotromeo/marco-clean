@@ -353,8 +353,8 @@ function homePage() {
 <div class="builder-section">
   <span class="section-label">The Builder</span>
   <h2 class="display">Gibson House — <em class="display-italic">designed to last</em></h2>
-  <p style="font-size:0.82rem; color:var(--muted); line-height:1.85; margin-top:1rem;">Originally built in 1926 by W.W. Boyle for first owner E.E. Andrews — Lot 25 of the historic Dahlgreen Tract. Boyle operated out of a prestigious address on W. 7th Street and built several homes on this block simultaneously to create the cohesive village feel that still defines the street today.</p>
-  <p style="font-size:0.82rem; color:var(--muted); line-height:1.85; margin-top:0.85rem;">Nearly a century later, Gibson House — a notable local design firm with luxury projects from Venice Beach to Pasadena — transformed the outdoor space: a deck off the kitchen, large travertine patio, Mediterranean landscaping, 25-foot cypress hedges, multiple olive trees, and a pool beside a vibrant orchard through a DG meditation garden.</p>
+  <p style="font-size:0.82rem; color:var(--muted); line-height:1.85; margin-top:1rem;">Set amongst some of the best homes in Los Angeles, a 1926 Tudor fully reimagined by Gibson House as their primary residence. Three bedrooms, two baths, and 2,050 square feet of quiet, considered interiors. A spacious formal living room anchored by a fluted fireplace and views of the tree-lined street. The Calacatta Viola kitchen opens to a deck off the back of the home — made for the morning coffee ritual.</p>
+  <p style="font-size:0.82rem; color:var(--muted); line-height:1.85; margin-top:0.85rem;">Step out of the den, past a second Calacatta Viola fireplace, onto a 400 sf travertine patio that leads into the oasis. The 11,000 sf lot is the love letter: covered pergola, DG meditation garden with fountain, a new pool set amongst a fruit orchard, all held in by fifty 25-foot cypress. Set back beyond the pool, a 250 sf converted garage — plumbed and ready for full ADU conversion. Dahlia Heights, the best elementary school in the city, is a four-minute walk from the front door. An assumable loan conveys with the home.</p>
 </div>
 
 <hr class="divider">
