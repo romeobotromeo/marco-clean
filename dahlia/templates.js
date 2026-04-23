@@ -455,9 +455,9 @@ function theHousePage() {
 
   <div class="house-section">
     <span class="section-label">Interior</span>
-    <h2 class="display">Original details, <em class="display-italic">fully alive</em></h2>
-    <p>Two stone and brick fireplaces. A den that feels like a mountain retreat. Separate formal dining. Oversized kitchen. Light-filled living room and tucked-away bedrooms that read like a storybook. Hardwood floors under the carpets, waiting.</p>
-    <p>Original details abound — this is a house that was built to last and cared for accordingly. The bones are exceptional.</p>
+    <h2 class="display">A Gibson House <em class="display-italic">Masterpiece</em></h2>
+    <p>A spacious formal living room anchored by a fluted fireplace and views of the tree-lined street. The Calacatta Viola kitchen opens to a deck off the back of the home — made for the morning coffee ritual.</p>
+    <p>The original home was totally restored — every detail considered, nothing overlooked. A 1926 Tudor brought fully into the present without losing an inch of its character.</p>
   </div>
 
   <div class="house-section">
