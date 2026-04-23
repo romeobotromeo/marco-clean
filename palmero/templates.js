@@ -78,7 +78,7 @@ nav {
 .ticker-inner {
   display: flex;
   white-space: nowrap;
-  animation: ticker 50s linear infinite;
+  animation: ticker 59s linear infinite;
 }
 .ticker-inner:hover { animation-play-state: paused; }
 .ticker-item {
