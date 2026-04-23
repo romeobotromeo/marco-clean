@@ -1442,7 +1442,7 @@ app.post('/sms-twilio', async (req, res) => {
 });
 
 // --- Send reminders to users silent for 24+ hours (called by cron) ---
-app.post('/send-reminders', async (req, res) => {
+app.post('/send-reminders', requireAdminAuth, async (req, res) => {
   try {
     const stale = await pool.query(
       `SELECT phone, state, site_url, sendblue_number FROM conversations
@@ -1480,7 +1480,7 @@ app.post('/send-reminders', async (req, res) => {
 });
 
 // --- Cleanup expired sites (called by cron) ---
-app.post('/cleanup-expired', async (req, res) => {
+app.post('/cleanup-expired', requireAdminAuth, async (req, res) => {
   try {
     // Phase 1: 48hrs no payment → mark expired, schedule Cloudflare deletion in 14 days
     const unpaid = await pool.query(
