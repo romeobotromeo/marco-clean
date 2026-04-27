@@ -347,6 +347,11 @@ async function getOrCreateConversation(phone) {
     'INSERT INTO conversations (phone, state) VALUES ($1, $2) RETURNING *',
     [phone, newState]
   );
+  // Notify admin of new signup
+  const adminPhone = process.env.ADMIN_PHONE;
+  if (adminPhone) {
+    sendSMS(adminPhone, `new marco signup: ${phone}`, MARCO_NUMBERS.primary).catch(() => {});
+  }
   return insert.rows[0];
 }
 
