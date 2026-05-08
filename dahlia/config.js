@@ -11,7 +11,7 @@ module.exports = {
   region:            'NELA',
 
   // Property details
-  price:     'Coming Soon',
+  price:     '$2,500,000',
   beds:      3,
   baths:     2,
   sqft:      2032,
@@ -44,7 +44,7 @@ module.exports = {
     'Meditation Garden',
     'Orchard + Pool',
     'NELA',
-    'Coming Soon',
+    '$2,500,000',
   ],
 
   // Giveaway

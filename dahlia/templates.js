@@ -78,7 +78,7 @@ function buildFooter() {
   <div class="footer-inner">
     <div>
       <div class="footer-address">${config.address.full}</div>
-      <div class="footer-sub">${config.neighborhood}, Los Angeles · ${config.beds} BD / ${config.baths} BA · Coming Soon</div>
+      <div class="footer-sub">${config.neighborhood}, Los Angeles · ${config.beds} BD / ${config.baths} BA · $2,500,000</div>
     </div>
     <div class="footer-links">
       <a href="/the-house">The House</a>
@@ -309,7 +309,7 @@ function homePage() {
   <div class="hero-right">
     <div>
       <span class="section-label">Listing Price</span>
-      <div class="hero-price">COMING SOON</div>
+      <div class="hero-price">$2,500,000</div>
     </div>
     <hr class="hero-divider">
     <div class="hero-specs">
