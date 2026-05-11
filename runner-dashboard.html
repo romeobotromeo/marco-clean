@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marco Runner — Daily Ops</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #f7f7f8;
+      --bg-soft: #ffffff;
+      --bg-alt: #f1f1f5;
+      --ink: #0f1115;
+      --muted: #565c63;
+      --border: #e2e4ea;
+      --accent: #101827;
+      --accent-soft: #1f2a44;
+      --accent-light: #eff3ff;
+      --success: #16a34a;
+      --warning: #ea580c;
+      --danger: #dc2626;
+      --font-body: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+    }
+
+    header {
+      padding: 18px 20px 12px;
+      background: linear-gradient(180deg, var(--accent) 0%, #111827 100%);
+      color: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .header-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .brand {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      opacity: 0.88;
+    }
+
+    .runner-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .shift-label {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 72px;
+    }
+
+    .panel {
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+      padding: 20px;
+      max-width: 560px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .panel.active {
+      display: flex;
+    }
+
+    .card {
+      background: var(--bg-soft);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 10px 28px rgba(15, 17, 21, 0.05);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .card-meta {
+      display: grid;
+      gap: 10px;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--accent-light);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .status-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-radius: 16px;
+      padding: 18px;
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      gap: 16px;
+    }
+
+    .status-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .status-label {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .status-hint {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .toggle {
+      position: relative;
+      width: 56px;
+      height: 32px;
+      background: var(--border);
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 4px 10px rgba(15, 17, 21, 0.12);
+      transition: transform 0.2s ease;
+    }
+
+    .toggle[data-state="available"] {
+      background: rgba(22, 163, 74, 0.22);
+    }
+
+    .toggle[data-state="available"]::after {
+      transform: translateX(24px);
+    }
+
+    .stat-row {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    }
+
+    .stat-card {
+      border-radius: 14px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .assignment-body {
+      display: grid;
+      gap: 12px;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .assignment-detail {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-weight: 500;
+    }
+
+    .assignment-detail span:last-child {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .assignment-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 12px 24px rgba(16, 24, 39, 0.15);
+    }
+
+    .btn-secondary {
+      background: #fff4f4;
+      color: var(--danger);
+      border: 1px solid rgba(220, 38, 38, 0.25);
+    }
+
+    .btn-tertiary {
+      background: var(--bg-alt);
+      color: var(--ink);
+      border: 1px solid var(--border);
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .map-placeholder {
+      border-radius: 14px;
+      background: linear-gradient(135deg, #e2e8f0 0%, #f8fafc 100%);
+      border: 1px dashed rgba(16, 24, 39, 0.25);
+      padding: 24px;
+      text-align: center;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .zone-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .zone-card {
+      border-radius: 14px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .zone-info {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .zone-name {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .zone-meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .zone-demand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .zone-demand[data-level="high"] {
+      background: rgba(220, 38, 38, 0.08);
+      color: var(--danger);
+    }
+
+    .zone-demand[data-level="medium"] {
+      background: rgba(234, 88, 12, 0.12);
+      color: var(--warning);
+    }
+
+    .zone-demand[data-level="steady"] {
+      background: rgba(22, 163, 74, 0.12);
+      color: var(--success);
+    }
+
+    .history-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .history-item {
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      display: grid;
+      gap: 8px;
+    }
+
+    .history-top {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+
+    .history-meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    nav {
+      position: sticky;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.96);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background: rgba(16, 24, 39, 0.08);
+      color: var(--accent);
+    }
+
+    .tab-btn span {
+      font-size: 1.15rem;
+    }
+
+    @media (min-width: 720px) {
+      header {
+        padding: 24px 32px 16px;
+      }
+
+      .panel {
+        padding: 28px 32px 96px;
+      }
+
+      nav {
+        padding: 12px 24px;
+        max-width: 560px;
+        margin: 0 auto;
+        border-radius: 24px 24px 0 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header>
+      <div class="header-meta">
+        <div class="brand">Marco Runner</div>
+        <div class="runner-name">Jordan M. · Shift 4PM – Close</div>
+        <div class="shift-label">Los Angeles Dispatch · Friday, May 10</div>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel active" data-panel="home">
+        <div class="status-toggle" id="statusToggle" data-state="offline">
+          <div class="status-copy">
+            <span class="status-label" id="statusLabel">You are offline</span>
+            <span class="status-hint" id="statusHint">Tap to go available and receive assignments.</span>
+          </div>
+          <button class="toggle" type="button" aria-pressed="false" aria-label="Toggle availability"></button>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="stat-label">Current location</div>
+            <div class="stat-value" id="locationValue">Silver Lake (GPS pending)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Today's earnings</div>
+            <div class="stat-value" id="earningsValue">$128.50</div>
+          </div>
+        </div>
+
+        <article class="card" id="activeAssignment">
+          <div class="card-header">
+            <span>Active Assignment</span>
+            <span class="pill">On Deck</span>
+          </div>
+          <div class="card-title">Key pickup · 1423 Hillhurst Ave</div>
+          <div class="card-meta">
+            <div>Meet locksmith on-site · Exchange keys + document inventory.</div>
+            <div class="assignment-detail"><span>Task window</span><span>5:30 – 6:15 PM</span></div>
+            <div class="assignment-detail"><span>Payout</span><span>$28.00</span></div>
+            <div class="assignment-detail"><span>Contact</span><span>Sierra (Ops) · (323) 555-0193</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel" data-panel="zones">
+        <article class="card">
+          <div class="card-header">
+            <span>Hot Zones</span>
+            <span class="pill">Evening rush</span>
+          </div>
+          <div class="map-placeholder">Live map coming soon. We’re holding Los Feliz + Echo Park drivers on standby.</div>
+        </article>
+
+        <div class="zone-list">
+          <div class="zone-card">
+            <div class="zone-info">
+              <div class="zone-name">Silver Lake</div>
+              <div class="zone-meta">ETA surge · 3 pending pickups · 2 drop-offs</div>
+            </div>
+            <div class="zone-demand" data-level="high">High</div>
+          </div>
+          <div class="zone-card">
+            <div class="zone-info">
+              <div class="zone-name">Echo Park</div>
+              <div class="zone-meta">Vendor coordination spike · 2 urgent lockouts</div>
+            </div>
+            <div class="zone-demand" data-level="high">High</div>
+          </div>
+          <div class="zone-card">
+            <div class="zone-info">
+              <div class="zone-name">Los Feliz</div>
+              <div class="zone-meta">Showings + staging checks · steady volume</div>
+            </div>
+            <div class="zone-demand" data-level="medium">Medium</div>
+          </div>
+          <div class="zone-card">
+            <div class="zone-info">
+              <div class="zone-name">Highland Park</div>
+              <div class="zone-meta">Document runs · 1 escrow package tonight</div>
+            </div>
+            <div class="zone-demand" data-level="steady">Steady</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="assignments">
+        <article class="card" id="pendingAssignment" data-status="pending">
+          <div class="card-header">
+            <span>New Assignment</span>
+            <span class="pill">Dispatch</span>
+          </div>
+          <div class="card-title">Property check · 512 Parkman Ave</div>
+          <div class="assignment-body">
+            <div class="assignment-detail"><span>Task type</span><span>Access & Photo Sweep</span></div>
+            <div class="assignment-detail"><span>Deadline</span><span>Today · 7:15 PM</span></div>
+            <div class="assignment-detail"><span>Payout</span><span>$36.00</span></div>
+            <div class="assignment-detail"><span>Notes</span><span>Confirm staging items, snap exterior + lockbox placement.</span></div>
+            <div class="assignment-detail"><span>Address</span><span>512 Parkman Ave, Los Angeles</span></div>
+          </div>
+          <div class="assignment-actions">
+            <button class="btn btn-secondary" type="button" data-action="decline">Decline</button>
+            <button class="btn btn-primary" type="button" data-action="accept">Accept</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <span>Backup request</span>
+            <span class="pill">Waitlist</span>
+          </div>
+          <div class="card-meta">
+            <div>Keep phone nearby for possible reroute to Downtown LA staging run.</div>
+            <div class="assignment-detail"><span>Est. payout</span><span>$22.00</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel" data-panel="history">
+        <article class="card">
+          <div class="card-header">
+            <span>Completed</span>
+            <span class="pill">Past 7 days</span>
+          </div>
+          <div class="history-list">
+            <div class="history-item">
+              <div class="history-top">
+                <span>Lockbox swap · 930 N Benton Way</span>
+                <span>$32.00</span>
+              </div>
+              <div class="history-meta">
+                <span>Completed · May 9 · 6:42 PM</span>
+                <span>Verified by Ops</span>
+              </div>
+            </div>
+            <div class="history-item">
+              <div class="history-top">
+                <span>Vendor escort · 5151 Sunset Blvd</span>
+                <span>$28.50</span>
+              </div>
+              <div class="history-meta">
+                <span>Completed · May 9 · 3:18 PM</span>
+                <span>Photos uploaded</span>
+              </div>
+            </div>
+            <div class="history-item">
+              <div class="history-top">
+                <span>Permit drop · 111 W Temple St</span>
+                <span>$24.00</span>
+              </div>
+              <div class="history-meta">
+                <span>Completed · May 8 · 10:10 AM</span>
+                <span>Receipt on file</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <nav>
+      <button class="tab-btn active" type="button" data-tab="home">
+        <span>🏠</span>
+        Home
+      </button>
+      <button class="tab-btn" type="button" data-tab="zones">
+        <span>🔥</span>
+        Hot Zones
+      </button>
+      <button class="tab-btn" type="button" data-tab="assignments">
+        <span>📦</span>
+        Assignments
+      </button>
+      <button class="tab-btn" type="button" data-tab="history">
+        <span>📋</span>
+        History
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const panels = document.querySelectorAll('.panel');
+    const statusToggle = document.getElementById('statusToggle');
+    const toggleButton = statusToggle.querySelector('.toggle');
+    const statusLabel = document.getElementById('statusLabel');
+    const statusHint = document.getElementById('statusHint');
+    const pendingAssignment = document.getElementById('pendingAssignment');
+
+    tabButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+
+        tabButtons.forEach((b) => b.classList.toggle('active', b === btn));
+        panels.forEach((panel) => {
+          panel.classList.toggle('active', panel.dataset.panel === target);
+        });
+      });
+    });
+
+    const setStatus = (state) => {
+      statusToggle.dataset.state = state;
+      toggleButton.dataset.state = state;
+      const available = state === 'available';
+      toggleButton.setAttribute('aria-pressed', available.toString());
+      statusLabel.textContent = available ? 'You are available' : 'You are offline';
+      statusHint.textContent = available
+        ? 'Dispatch can assign jobs. Toggle off when you need a break.'
+        : 'Tap to go available and receive assignments.';
+    };
+
+    statusToggle.addEventListener('click', (event) => {
+      if (event.target === toggleButton || event.currentTarget === event.target) {
+        const nextState = statusToggle.dataset.state === 'available' ? 'offline' : 'available';
+        setStatus(nextState);
+      }
+    });
+
+    const updateAssignmentCard = (accepted) => {
+      if (!pendingAssignment) return;
+
+      const actions = pendingAssignment.querySelector('.assignment-actions');
+      const header = pendingAssignment.querySelector('.card-header span:first-child');
+      const pill = pendingAssignment.querySelector('.pill');
+
+      if (accepted) {
+        pendingAssignment.dataset.status = 'accepted';
+        header.textContent = 'Assignment booked';
+        pill.textContent = 'Confirmed';
+        pill.style.background = 'rgba(22, 163, 74, 0.12)';
+        pill.style.color = 'var(--success)';
+        actions.innerHTML = '<button class="btn btn-tertiary" type="button">View checklist</button>';
+      } else {
+        pendingAssignment.dataset.status = 'declined';
+        header.textContent = 'Declined';
+        pill.textContent = 'Routing next';
+        pill.style.background = 'rgba(220, 38, 38, 0.08)';
+        pill.style.color = 'var(--danger)';
+        actions.innerHTML = '<span style="font-size:0.9rem;color:var(--muted);">Dispatch notified. We’ll queue the next run.</span>';
+      }
+    };
+
+    pendingAssignment?.querySelectorAll('[data-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const accepted = button.dataset.action === 'accept';
+        updateAssignmentCard(accepted);
+      });
+    });
+  </script>
+</body>
+</html>

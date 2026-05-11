@@ -1,219 +1,269 @@
-# Marco — SMS Website Builder
+# Text Marco — Home Operations Concierge
 
-Marco lets people build a website by text message. Text a number, answer 5 questions, get a live site at `*.textmarco.com`. $9.99/mo.
-
-Live server: **https://marco-clean.onrender.com**
-Marketing page: **https://textmarco.com** (served by Cloudflare Worker)
+Text Marco is now a 24/7 home-operations desk. Anyone can text **(645) 206-3407** and Marco will coordinate what needs to happen around a property — from seller prep and vendor meetups to permits, inspections, and on-demand runner support. This repo powers the public SMS experience, request triage, and persistence layer.
 
 ---
 
-## How It Works
+## System Overview
 
-1. User texts one of the Marco numbers
-2. Claude (via Anthropic API) guides them through 5 questions: business or personal, name, type, description, contact info
-3. Server generates HTML via `template-engine.js`, deploys to Cloudflare Pages as `{slug}.textmarco.com`
-4. User gets a payment link ($9.99/mo via Stripe)
-5. On payment, site goes live and user gets a confirmation text
-6. User can keep texting Marco to make changes
+| Layer | Purpose |
+| --- | --- |
+| Node.js / Express (`server.js`) | Receives inbound SMS (Sendblue + Twilio fallback), routes ops requests, handles runner applications, persists every interaction |
+| Supabase | Source of truth for users, properties, requests, messages, runner applicants, notes, and live roster bindings |
+| Anthropic Claude (`claude-sonnet-4-5`) | Generates short operational replies + metadata for categorisation |
+| Sendblue | Primary SMS provider for the (645) number + outbound qualification pings |
+| Twilio | Backup/toll-free SMS provider for the (888) number |
+| Cloudflare Worker (`apps/live/marco-clean/textmarco-worker/worker.js`) | Serves marketing + `/runner` recruiting landing page |
+| Admin Reset Endpoint | `POST /admin/reset/:phone` with `Authorization: Bearer <ADMIN_API_TOKEN>` resets a conversation, optionally clearing history |
+
+The legacy website-builder workflow and Render PostgreSQL tables have been removed. Every inbound message now enters the home-ops concierge flow.
 
 ---
 
-## Stack
+## Data Model (Supabase)
 
-| Layer | Tech |
-|---|---|
-| Server | Node.js / Express on Render |
-| Database | PostgreSQL on Render (marco-db) |
-| AI | Claude Sonnet (`claude-sonnet-4-5`) via Anthropic SDK |
-| SMS (primary) | SendBlue — 645 number: `+16452063407` |
-| SMS (toll-free) | Twilio — 888 number: `+18889007501` |
-| Site hosting | Cloudflare Pages (`*.textmarco.com`) |
-| Subdomain proxies | Cloudflare Workers (one per property site) |
-| Payments | Stripe (checkout session, $9.99/mo) |
+All tables live in `apps/live/marco-clean/supabase-schema.sql`. Apply it inside the Supabase SQL editor or via `psql`.
+
+| Table | Description |
+| --- | --- |
+| `users` | One row per phone number. Tracks first/last touch, last known category, and role (agent, homeowner, runner prospect, etc.). |
+| `properties` | Known properties associated with a phone number. De-duped by phone + address fingerprint. |
+| `requests` | Structured summary of each inbound ask (category, urgency, notes, runner interest). |
+| `messages` | Full message history (inbound and outbound) with raw payload snapshots. |
+| `runners` | People interested in becoming Marco Runners, including last contact timestamp, status, and linked applicant id. |
+| `runner_applicants` | Structured intake for Marco Runner applications (profile, status, tags, Calendly metadata). |
+| `runner_applicant_notes` | Internal notes threaded to each runner applicant (qualification, follow-up, scoring). |
+| `offer_room_waitlist` | Agents who joined the Offer Room waitlist from the landing page CTA. |
+
+Run the migrations:
+
+```sql
+-- Supabase SQL Editor
+\i apps/live/marco-clean/supabase-schema.sql
+```
 
 ---
 
 ## Environment Variables
 
-```
-DATABASE_URL              Render PostgreSQL connection string
-ANTHROPIC_API_KEY         Claude API key
-SENDBLUE_API_KEY          SendBlue API key
-SENDBLUE_API_SECRET       SendBlue API secret
-TWILIO_ACCOUNT_SID        Twilio account SID
-TWILIO_AUTH_TOKEN         Twilio auth token
-STRIPE_SECRET_KEY         Stripe secret key
-STRIPE_WEBHOOK_SECRET     Stripe webhook signing secret
-STRIPE_PAYMENT_LINK       Stripe checkout URL ($9.99/mo)
-CLOUDFLARE_ACCOUNT_ID     Cloudflare account ID
-CLOUDFLARE_API_TOKEN      Cloudflare API token (Pages + Workers)
-ADMIN_SECRET              Password for admin routes (optional, open if unset)
-ADMIN_PIN                 PIN for mobile /activate page (default: 1234)
-ADMIN_PHONE               Phone number to receive special request SMS alerts
-```
-
----
-
-## Conversation State Machine
-
-```
-waitlist → greeting → onboarding (Claude-driven) → building → awaiting_payment → active
-```
-
-- **waitlist**: User texted in but hasn't been activated yet
-- **greeting**: Marco's opening message sent, waiting for response
-- **onboarding**: Claude is asking the 5 questions (handled entirely by Claude)
-- **building**: Site is being generated and deployed
-- **awaiting_payment**: Site built, payment link sent
-- **active**: Paid. User can text changes anytime.
-
-**Opening message**: `"hey it's Marco. are you ready to take the internet by storm? let's build you a site. business or personal?"`
-
-**Secret password**: Text `"chowder"` to skip payment and get 30 days free (Josh referral easter egg).
-
----
-
-## SMS Routing
-
-Two SMS providers run in parallel. `sendReply()` in `server.js` routes to the correct provider based on which number the conversation came in on.
-
-- **SendBlue webhook**: `POST /sms` — handles inbound from 645 number
-- **Twilio webhook**: `POST /sms-twilio` — handles inbound from 888 number
-
-> **SendBlue sandbox note**: New contacts must be manually added in the SendBlue dashboard before they can receive texts. This is a SendBlue sandbox limitation until the account is fully verified.
-
----
-
-## Key Files
-
-```
-server.js               Main Express app — all routes and SMS handlers
-template-engine.js      Generates site HTML from collected user info
-cloudflare-deployer.js  Deploys sites to Cloudflare Pages, creates DNS records
-palmero/                4175palmero.textmarco.com — property listing site
-  routes.js             Express router (virtual host + /palmero/* mount)
-  templates.js          All HTML/CSS for the site
-  config.js             Property data (price, beds, baths, photos, etc.)
-  article-generator.js  Daily SEO articles (cron: 2am UTC)
-  public/               Photos served at /public/*
-dahlia/                 5142dahlia.textmarco.com — property listing site
-  routes.js             Same structure as palmero
-  templates.js
-  config.js
-  article-generator.js  Daily SEO articles (cron: 3am UTC)
-  public/
-index.html              textmarco.com placeholder (NOT what serves the domain — see below)
-landing-page.html       Served at /dellvale
-```
-
----
-
-## textmarco.com
-
-The root domain is **not** served from this Express app. It's a Cloudflare Worker named `jolly-water-6728` that serves a "coming soon" page with a waitlist phone capture form. Form submissions POST to `https://marco-clean.onrender.com/marco-waitlist`.
-
-To update textmarco.com, edit `/tmp/textmarco-worker/worker.js` and deploy:
 ```bash
-unset CLOUDFLARE_API_TOKEN   # must unset — wrangler uses OAuth, not API token
-cd /tmp/textmarco-worker
-npx wrangler deploy
+# AI
+ANTHROPIC_API_KEY=...
+
+# Supabase persistence
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+
+# SMS providers
+SENDBLUE_API_KEY=...
+SENDBLUE_API_SECRET=...
+SENDBLUE_FROM_NUMBER=+16452063407
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_NUMBER=+18889007501
+
+# Optional
+PORT=3000
+ADMIN_API_TOKEN=super-secure-reset-key
+DEFAULT_RESET_MESSAGE="On it. Reset. Reply with what you need."
 ```
 
----
-
-## Property Sites
-
-Both `4175palmero.textmarco.com` and `5142dahlia.textmarco.com` are virtual-hosted on this Express server via Cloudflare Worker proxies.
-
-**How routing works:**
-1. User hits `5142dahlia.textmarco.com`
-2. Cloudflare Worker intercepts, proxies to `https://marco-clean.onrender.com/dahlia{pathname}`
-3. Express serves the route via `dahliaRouter`
-4. Static files (photos) at `/public/*` resolve to `dahlia/public/*` via `express.static(__dirname)`
-
-**To update a property site**: Edit `palmero/` or `dahlia/`, commit, push to `main`. Render auto-redeploys.
-
-**Daily articles**: Both sites have a cron job that generates one SEO article per day using Claude, rotating through 30 keywords defined in `config.js`. Articles appear at `/area-guide`.
-
----
-
-## Admin Endpoints
-
-All require `?secret=ADMIN_SECRET` or `x-admin-secret` header (unless `ADMIN_SECRET` is unset).
-
-### Conversation Management
-| Method | Route | Description |
-|---|---|---|
-| POST | `/admin/reset/:phone` | Clear all data, set state to greeting |
-| POST | `/admin/activate/:phone` | Move from waitlist → greeting, send opening message |
-| POST | `/admin/bypass/:phone` | Skip payment, instant active |
-| POST | `/admin/delete/:phone` | Delete conversation record |
-| GET | `/admin/debug/:phone` | Inspect state + last 10 messages |
-
-### Dashboard & Waitlists
-| Method | Route | Description |
-|---|---|---|
-| GET | `/dashboard` | Admin dashboard — all customers and conversations |
-| GET | `/activate` | Mobile activation page (PIN-protected, tap to activate waitlist users) |
-| POST | `/activate-user` | Activate a specific waitlist user |
-| GET | `/admin/marco-waitlist` | textmarco.com waitlist signups (add `?format=csv` for CSV) |
-| GET | `/admin/giveaways` | Giveaway entries for Palmero and Dahlia |
-| POST | `/admin/toggle-waitlist` | Toggle waitlist mode on/off |
-
-### Property Sites
-| Method | Route | Description |
-|---|---|---|
-| GET | `/admin/palmero-worker` | Deploy/redeploy Palmero Cloudflare Worker proxy |
-| POST | `/admin/palmero-article` | Manually trigger Palmero article generation |
-| GET | `/admin/dahlia-worker` | Deploy/redeploy Dahlia Cloudflare Worker proxy |
-| POST | `/admin/dahlia-article` | Manually trigger Dahlia article generation |
-| POST | `/admin/fix-domains` | Retroactively add Cloudflare DNS to all projects |
-
----
-
-## Deployment
-
-Hosted on **Render** (free tier — spins down after inactivity, ~30s cold start).
-
-- Push to `main` → Render auto-redeploys
-- Start command: `node server.js`
-- Database: Render PostgreSQL, tables auto-created on first boot
-
----
-
-## Database Tables (auto-created on startup)
-
-| Table | Purpose |
-|---|---|
-| `conversations` | One row per user — state, messages, site data |
-| `customers` | Customer status and metadata |
-| `waitlist` | SMS waitlist entries |
-| `marco_waitlist` | Web waitlist (textmarco.com form) |
-| `palmero_giveaway` | Palmero giveaway entries |
-| `dahlia_giveaway` | Dahlia giveaway entries |
-| `palmero_articles` | Daily SEO articles for Palmero site |
-| `dahlia_articles` | Daily SEO articles for Dahlia site |
-| `special_requests` | Flagged upgrade/custom requests from active users |
-| `app_settings` | Key/value store for runtime toggles (e.g. waitlist mode) |
+> **Why service role?** The server runs headless and needs to insert system records. Restrict this key at the network level (Render/Cloudflare environment variables only).
 
 ---
 
 ## Local Development
 
 ```bash
+cd apps/live/marco-clean
 npm install
-DATABASE_URL=... ANTHROPIC_API_KEY=... node server.js
+
+# Apply supabase-schema.sql using the Supabase SQL editor or psql
+
+export ANTHROPIC_API_KEY=...
+export SUPABASE_URL=...
+export SUPABASE_SERVICE_ROLE_KEY=...
+export SENDBLUE_API_KEY=...
+export SENDBLUE_API_SECRET=...
+export SENDBLUE_FROM_NUMBER=+16452063407
+
+# Optional Twilio credentials if you want to test the toll-free number locally
+
+npm start
+# server listens on http://localhost:3000
 ```
 
-Property sites accessible locally at:
-- `localhost:3000/palmero/`
-- `localhost:3000/dahlia/`
-
-SMS webhooks require a tunnel (ngrok) pointed at `/sms` and `/sms-twilio`.
+To test webhooks, run ngrok (or Cloudflared) and point Sendblue’s inbound webhook to `https://<tunnel>/sms`. The Twilio fallback listens at `/sms-twilio`.
 
 ---
 
-## Planned / In Progress
+## SMS Flow
 
-- **Upgrade queue**: When active users ask about features beyond basic editing (bookings, payments, custom domain), Marco flags them in DB and surfaces them in the dashboard
-- SendBlue full account verification (removes sandbox contact restriction)
+1. **Incoming text** hits `/sms` (Sendblue) or `/sms-twilio` (backup).
+2. `server.js`:
+   - Normalises the phone number
+   - Upserts the `users` row and logs the raw payload into `messages`
+   - Pulls the last ~12 messages for context
+   - Calls Anthropic with a strict JSON contract to get the reply, category, urgency, and required follow-ups
+   - Persists the structured request + property info
+   - Flags runner interest when applicable and upserts into `runners`
+   - Sends the reply via the originating provider
+
+**Default greeting** for new numbers:
+
+> “Hey, this is Marco. Tell me what you need help with around the home — repairs, prep, vendors, access, permits, inspections, or real estate support.”
+
+Runner questions trigger the Marco Runner explanation: $30/hr, on-demand property visits, vendor coordination, photo/documentation work, and the optional launch bonus after vetting.
+
+Emergency or safety language prompts a reminder to contact licensed professionals or emergency services immediately.
+
+---
+
+## Runner Recruiting Funnel
+
+### Public experience
+
+| Path | Description |
+| --- | --- |
+| `/runner` | Cloudflare Worker route with the recruiting landing page, application form, and Calendly embed |
+| `/` → CTA | Primary landing now links to `/runner` via desktop header + mobile sticky CTA |
+
+The form POSTs to the Render API (`/runner/apply`). On success the page:
+
+1. Shows confirmation copy
+2. Reveals the Calendly inline widget (defaults to `https://calendly.com/marco-runner/intro-call` or override via `RUNNER_CALENDLY_URL`)
+3. Keeps the visitor in the DOM (no redirect) so we can iterate without pushing them off-site.
+
+### API endpoint
+
+`POST /runner/apply`
+
+Payload (all fields string, trimmed server-side):
+
+```json
+{
+  "name": "...",
+  "phone": "...",
+  "email": "...",
+  "city": "...",
+  "neighborhood": "...",
+  "car_access": "yes|sometimes|no",
+  "phone_os": "iphone|android|other",
+  "availability": "...",
+  "intro": "...",
+  "source": "runner-landing" // default
+}
+```
+
+Behaviour:
+
+1. `runner_applicants` upsert by phone (normalised). Tags are merged and include neighborhoods + source.
+2. `runners` table is linked (via `applicant_id`) and status set to `applicant`.
+3. Note is appended in `runner_applicant_notes` with the intro + source.
+4. Sendblue contact is updated with tag lists (city, availability, etc.) if credentials present.
+5. Automated SMS is sent from Sendblue prompting availability details.
+6. Response body:
+
+```json
+{ "success": true, "applicant_id": "...", "calendly": "<RUNNER_CALENDLY_URL>" }
+```
+
+### Environment variables
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `RUNNER_CALENDLY_URL` | `https://calendly.com/marco-runner/intro-call` | Inline Calendly booking shown after application |
+| `RUNNER_SOURCE_TAG` | `runner-landing` | Default `source` tag stored with applicants |
+| `RUNNER_LIST_TAG` | `runner-prospect` | Baseline tag pushed to Sendblue contact |
+
+The endpoint gracefully no-ops if Supabase or Sendblue creds are missing, returning `503`/`500` accordingly.
+
+### Testing checklist
+
+- [ ] Load `https://textmarco.com/runner` and submit the form with a test number.
+- [ ] Verify `runner_applicants`, `runner_applicant_notes`, and `runners` rows populate via Supabase UI.
+- [ ] Confirm automated SMS arrives from Sendblue and the contact picked up tags.
+- [ ] Ensure Calendly widget displays with the configured URL.
+- [ ] Run `/health` endpoint and confirm `updated: 'home-ops concierge + runner recruiting'`.
+
+> Need to change markets, tags, or scoring logic? Update `upsertRunnerApplicant` & `buildListTags` inside `server.js`.
+
+---
+
+## Landing Page Deployment
+
+### TextMarco worker (primary domain)
+
+The public landing page lives at `apps/live/marco-clean/textmarco-worker/worker.js`. Deploy with Wrangler:
+
+```bash
+cd apps/live/marco-clean/textmarco-worker
+wrangler login        # once per machine, opens browser OAuth
+npx wrangler deploy
+```
+
+Ensure the Worker routes (`wrangler.toml`) still target `textmarco.com/*`.
+
+### Runner landing (runner.textmarco.com)
+
+The single-page runner funnel now lives at `apps/live/marco-clean/runner-landing.html`.
+
+**Pre-launch checklist**
+
+1. **Configure analytics placeholders**
+   - Set `window.__META_PIXEL_ID = '<your_pixel_id>'` via an inline script before the Meta Pixel block or inject it server-side.
+   - Connect Plausible/Segment to `window.runnerAnalyticsQueue` if you need additional destinations.
+2. **Verify Formspree target**
+   - Submit a test entry and confirm the JSON response returns `{ "ok": true }` and the notification email fires.
+   - Update the Formspree form if you rotate API keys (`action="https://formspree.io/f/xbldevoy"`).
+3. **Smoke-test UX**
+   - Desktop and mobile (≤480px) renderings should show the CTA and status messaging without horizontal scroll.
+   - Confirm the inline status banner flips between success/error when you simulate failures (disable network in devtools).
+
+**Cloudflare Pages fast deploy**
+
+```bash
+cd apps/live/marco-clean
+mkdir -p tmp/runner-landing
+cp runner-landing.html tmp/runner-landing/index.html
+wrangler pages deploy tmp/runner-landing \
+  --project-name runner-landing \
+  --branch production \
+  --commit-dirty \
+  --env production
+```
+
+- Point `runner.textmarco.com` (or the desired hostname) at the Cloudflare Pages project.
+- Add `window.__META_PIXEL_ID` as a Pages Environment Variable or inject it via `_headers`/`_worker.js` if you need per-environment pixels.
+- After deployment, submit one live waitlist form and verify receipt, then clear the test row from Formspree.
+
+> **Note:** If you prefer to serve from the existing Worker instead of Pages, copy the HTML into `textmarco-worker/worker.js` under the `/runner` route and redeploy with Wrangler.
+
+---
+
+## Deployment Notes
+
+* **Render**: Start command remains `node server.js`. Set all environment variables above. No Render PostgreSQL is required anymore.
+* **Supabase**: Lock this project to your internal network. The service role key should never ship to clients.
+* **Sendblue**: Sandbox accounts require manually approving destination numbers. Production keys remove that restriction.
+* **Twilio** (optional): Provide SID/auth token only if you plan to keep the toll-free number active.
+
+---
+
+## Operational Checklist
+
+- [ ] Apply `supabase-schema.sql` to Supabase
+- [ ] Configure environment variables in Render + Wrangler secrets
+- [ ] Deploy Cloudflare Worker (`wrangler deploy`)
+- [ ] Push to `main` to trigger Render deployment (or redeploy manually)
+- [ ] Smoke test by texting (645) 206-3407 and confirming:
+  - greeting response
+  - request persists in Supabase `requests`
+  - message history logs in `messages`
+  - runner inquiries populate `runners`
+  - Offer Room waitlist submissions land in `offer_room_waitlist`
+- [ ] Reset workflow: `curl -H "Authorization: Bearer $ADMIN_API_TOKEN" -X POST https://<host>/admin/reset/+16452063407` returns success and sends reset SMS
+
+---
+
+Questions or issues? Update this README and the Supabase schema as the product evolves.

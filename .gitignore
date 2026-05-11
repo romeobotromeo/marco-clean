@@ -5,3 +5,4 @@
 sites/
 .claude/
 *.swp
+node_modules/

@@ -1,8 +1,9 @@
-# Marco SMS Website Builder
+# Marco SMS Home Ops Concierge
 
 ## What this is
-- SMS service that builds websites via text
-- Users text, Marco (AI) responds, collects info, builds site
+- SMS service being reconfigured away from website building
+- Users text Marco what they need around a home
+- Marco responds as a home-ops concierge, collects scope/details, and alerts ops
 
 ## Current state
 - Sendblue 623 number: WORKING
@@ -20,7 +21,7 @@
 ## Architecture
 - Two SMS providers: SendBlue (623) + Twilio (888 toll-free)
 - sendReply() routes to correct provider based on which number the convo came in on
-- Conversation state machine: waitlist → greeting → ask_name → ask_type → awaiting_payment → active
+- Conversation state machine: inbound SMS → home_ops triage → internal ops follow-up
 - Sites saved to DB (site_html), disk (sites/*.html), and Cloudflare Pages
 
 ## Active Render services
@@ -28,6 +29,7 @@
 - marco-sms.onrender.com — OLD server. Do not use. Ignore it.
 
 ## What we're building
+- New default: home-ops SMS triage. Do not send new users into website creation.
 - Add Twilio 888 as second channel alongside Sendblue
 - /sms-twilio webhook already coded in server.js
 - Needs: TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN env vars on Render (verify these are set)
