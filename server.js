@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const Anthropic = require('@anthropic-ai/sdk');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+const telegram = require('./telegram');
 
 const app = express();
 
@@ -31,6 +32,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
 const DEFAULT_GREETING = "Hey, this is Marco. Tell me what you need help with around the home — repairs, prep, vendors, access, permits, inspections, or real estate support.";
 const DEFAULT_RESET_MESSAGE = process.env.DEFAULT_RESET_MESSAGE || DEFAULT_GREETING;
+const RUNNER_GREETING = "Hey, this is Marco. Interested in runner work? Reply with your city, neighborhood, car access, phone type, and when you're usually available.";
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RUNNER_CALENDLY_URL = process.env.RUNNER_CALENDLY_URL || 'https://calendly.com/marco-runner/intro-call';
@@ -494,7 +496,11 @@ async function sendTwilioSMS(to, content, fromNumber) {
   );
 }
 
-function buildSystemPrompt(isNewContact) {
+function greetingForChannel(channel) {
+  return channel === 'twilio' ? RUNNER_GREETING : DEFAULT_GREETING;
+}
+
+function buildSystemPrompt(isNewContact, channel) {
   const basePrompt = `You are Marco, a 24/7 home operations concierge handling requests for sellers, FSBO owners, agents, and homeowners.
 
 You coordinate: seller prep, FSBO support, Offer Room tasks for agents, vendor meetups, property access, permits, plumbing, electrical, HVAC, handyman work, landscaping, brush clearing, cleaning and junk removal, inspection repair bids, off-market opportunities, and general homeowner coordination.
@@ -530,7 +536,7 @@ Output ONLY valid JSON with this shape:
   if (isNewContact) {
     return `${basePrompt}
 
-This is the first inbound message from this phone number. Set reply EXACTLY to "${DEFAULT_GREETING}" while still filling the metadata fields based on the incoming request.`;
+This is the first inbound message from this phone number. Set reply EXACTLY to "${greetingForChannel(channel)}" while still filling the metadata fields based on the incoming request.`;
   }
 
   return basePrompt;
@@ -562,10 +568,111 @@ function parseAgentJson(text) {
   }
 }
 
-async function runHomeOpsAgent({ history, isNewContact }) {
+function summarizeTelegramMessageContent(message, text) {
+  const pieces = [];
+  const trimmedText = typeof text === 'string' ? text.trim() : '';
+  if (trimmedText) pieces.push(trimmedText);
+
+  const attachments = [];
+
+  if (message?.photo) attachments.push('[photo]');
+  if (message?.video) attachments.push('[video]');
+  if (message?.video_note) attachments.push('[video note]');
+  if (message?.voice) attachments.push('[voice message]');
+  if (message?.audio) attachments.push('[audio]');
+  if (message?.document) {
+    const name = message.document.file_name ? ` ${message.document.file_name}` : '';
+    attachments.push(`[document${name}]`);
+  }
+  if (message?.sticker) attachments.push(`[sticker ${message.sticker.emoji || ''}]`.trim());
+  if (message?.contact) attachments.push('[contact]');
+  if (message?.location) {
+    const { latitude, longitude } = message.location;
+    const lat = typeof latitude === 'number' ? latitude.toFixed(4) : latitude;
+    const lon = typeof longitude === 'number' ? longitude.toFixed(4) : longitude;
+    attachments.push(`[location ${lat},${lon}]`);
+  }
+  if (message?.poll) attachments.push('[poll]');
+  if (message?.dice) attachments.push(`[dice ${message.dice.emoji || ''}]`.trim());
+  if (message?.venue) attachments.push('[venue]');
+
+  if (!pieces.length && attachments.length) {
+    return attachments.join(' ');
+  }
+
+  if (attachments.length) {
+    pieces.push(attachments.join(' '));
+  }
+
+  return pieces.length ? pieces.join('\n') : '[no text]';
+}
+
+async function handleTelegramUpdate(update) {
+  const parsed = telegram.extractMessage(update);
+  if (!parsed) return;
+
+  const { chatId, text, from, message } = parsed;
+  if (!chatId) return;
+  if (from?.is_bot) return;
+
+  if (!telegram.isChatAllowed(chatId)) {
+    console.warn(`[Telegram] Ignoring message from unauthorized chat ${chatId}`);
+    return;
+  }
+
+  const chatIdStr = String(chatId);
+  const normalizedText = typeof text === 'string' ? text.trim() : '';
+
+  if (normalizedText === '/start') {
+    let startMessage = 'Connected. Messages you send here will be relayed.';
+    if (telegram.TELEGRAM_PRIMARY_CHAT_ID && chatIdStr === telegram.TELEGRAM_PRIMARY_CHAT_ID) {
+      startMessage = 'Connected. Anything you type here forwards to your Chief of Staff.';
+    } else if (telegram.TELEGRAM_CHIEF_CHAT_ID && chatIdStr === telegram.TELEGRAM_CHIEF_CHAT_ID) {
+      startMessage = 'Connected. Messages here forward directly to Romeo.';
+    }
+    await telegram.sendMessage({ chatId, text: startMessage });
+    return;
+  }
+
+  if (!telegram.TELEGRAM_PRIMARY_CHAT_ID || !telegram.TELEGRAM_CHIEF_CHAT_ID) {
+    console.warn('[Telegram] Missing primary or chief chat ID; cannot relay message.');
+    return;
+  }
+
+  let targetChatId = null;
+  let defaultSourceLabel = null;
+
+  if (chatIdStr === telegram.TELEGRAM_PRIMARY_CHAT_ID) {
+    targetChatId = telegram.TELEGRAM_CHIEF_CHAT_ID;
+    defaultSourceLabel = 'Romeo';
+  } else if (chatIdStr === telegram.TELEGRAM_CHIEF_CHAT_ID) {
+    targetChatId = telegram.TELEGRAM_PRIMARY_CHAT_ID;
+    defaultSourceLabel = 'Chief of Staff';
+  } else {
+    targetChatId = telegram.TELEGRAM_PRIMARY_CHAT_ID;
+    defaultSourceLabel = telegram.TELEGRAM_PRIMARY_CHAT_ID === chatIdStr ? 'Romeo' : 'Forwarded';
+  }
+
+  if (!targetChatId) {
+    console.warn(`[Telegram] No target chat mapping for chat ${chatIdStr}`);
+    return;
+  }
+
+  const body = summarizeTelegramMessageContent(message, text);
+  const senderLabel = telegram.formatSender(from) || defaultSourceLabel || 'Unknown';
+  const outgoing = `From ${senderLabel}:\n${body}`;
+
+  try {
+    await telegram.sendMessage({ chatId: targetChatId, text: outgoing });
+  } catch (error) {
+    console.error('[Telegram] Failed to forward message:', error.message || error);
+  }
+}
+
+async function runHomeOpsAgent({ history, isNewContact, channel }) {
   if (!anthropic.apiKey) {
     return {
-      reply: isNewContact ? DEFAULT_GREETING : 'On it. Need the address and timing to move forward.',
+      reply: isNewContact ? greetingForChannel(channel) : 'On it. Need the address and timing to move forward.',
       category: 'general',
       urgency: 'normal',
       needs: { address: true, timing: true, access: false, budget: false, photos: false },
@@ -576,7 +683,7 @@ async function runHomeOpsAgent({ history, isNewContact }) {
   }
 
   const messages = buildAnthropicMessages(history);
-  const system = buildSystemPrompt(isNewContact);
+  const system = buildSystemPrompt(isNewContact, channel);
 
   try {
     const response = await anthropic.messages.create({
@@ -591,14 +698,14 @@ async function runHomeOpsAgent({ history, isNewContact }) {
     if (parsed?.reply) {
       parsed.reply = parsed.reply.length > 160 ? `${parsed.reply.slice(0, 157)}...` : parsed.reply;
     }
-    if (isNewContact) {
-      parsed.reply = DEFAULT_GREETING;
-    }
+if (isNewContact) {
+  parsed.reply = greetingForChannel(channel);
+}
     return parsed;
   } catch (error) {
     console.error('[Marco AI] Anthropic failure:', error.message || error);
     return {
-      reply: isNewContact ? DEFAULT_GREETING : 'On it. Need the address and timing to keep this moving.',
+      reply: isNewContact ? greetingForChannel(channel) : 'On it. Need the address and timing to keep this moving.',
       category: 'general',
       urgency: 'normal',
       needs: { address: true, timing: true, access: false, budget: false, photos: false },
@@ -610,7 +717,7 @@ async function runHomeOpsAgent({ history, isNewContact }) {
 }
 
 async function handleInboundMessage({ channel, phone, textBody, mediaUrl, providerNumber, rawPayload }) {
-  if (!phone) return { reply: DEFAULT_GREETING };
+  if (!phone) return { reply: greetingForChannel(channel) };
 
   const normalizedBody = textBody && textBody.trim().length > 0 ? textBody.trim() : (mediaUrl ? '[media]' : '');
 
@@ -627,10 +734,42 @@ async function handleInboundMessage({ channel, phone, textBody, mediaUrl, provid
   const isResetContact = !!resetSince && history.length <= 1;
   const effectiveIsNewContact = isNew || isResetContact;
 
-  const agentResult = await runHomeOpsAgent({ history, isNewContact: effectiveIsNewContact });
+  if (channel === 'twilio') {
+    const applicant = await upsertRunnerApplicant({
+      phone,
+      intro: normalizedBody,
+      source: 'twilio-888',
+    });
+    if (applicant?.id && normalizedBody) {
+      await appendApplicantNote(applicant.id, `Inbound 888 runner text: "${normalizedBody}"`, { author: 'marco-sms' });
+    }
+
+    const agentResult = {
+      reply: `Thanks for reaching out to join the Marco team. I’ll get your runner profile started. Book a quick founder chat with Josh here: ${RUNNER_CALENDLY_URL}. Reply with city/neighborhood, car access, phone type, and availability.`,
+      category: 'runner',
+      urgency: 'normal',
+      needs: { address: false, timing: true, access: false, budget: false, photos: false },
+      runner_interest: true,
+      property_address: null,
+      notes: '888 runner applicant intake',
+    };
+
+    await updateUserProfile(phone, agentResult);
+    await recordRequest(phone, agentResult, normalizedBody);
+    await recordRunnerInterest(phone, agentResult);
+    await logMessage(phone, 'outbound', agentResult.reply, null, null);
+
+    if (resetSince) {
+      await clearConversationReset(phone);
+    }
+
+    return { reply: agentResult.reply, analysis: agentResult, providerNumber };
+  }
+
+  const agentResult = await runHomeOpsAgent({ history, isNewContact: effectiveIsNewContact, channel });
 
   if (!agentResult || !agentResult.reply) {
-    agentResult.reply = isNew ? DEFAULT_GREETING : 'On it. Need the address and timing to keep this moving.';
+    agentResult.reply = isNew ? greetingForChannel(channel) : 'On it. Need the address and timing to keep this moving.';
   }
 
   await updateUserProfile(phone, agentResult);
@@ -676,27 +815,50 @@ app.post('/sms', async (req, res) => {
 app.post('/sms-twilio', async (req, res) => {
   const phone = normalizePhone(req.body.From);
   const providerNumber = normalizePhone(req.body.To || process.env.TWILIO_NUMBER);
-  const mediaUrl = req.body.MediaUrl0 || null;
   const textBody = req.body.Body || '';
 
   try {
-    const result = await handleInboundMessage({
-      channel: 'twilio',
+    // Bypass general AI agent and send fixed runner onboarding reply
+    const applicant = await upsertRunnerApplicant({
       phone,
-      textBody,
-      mediaUrl,
-      providerNumber,
-      rawPayload: req.body,
+      intro: textBody,
+      source: 'twilio-888',
     });
+    if (applicant?.id && textBody) {
+      await appendApplicantNote(applicant.id, `Inbound 888 runner text: "${textBody}"`, { author: 'marco-sms' });
+    }
+
+    const reply = `Thanks for reaching out to join the Marco team. I’ll get your runner profile started. Book a quick founder chat with Josh here: ${RUNNER_CALENDLY_URL}. Reply with city/neighborhood, car access, phone type, and availability.`;
 
     if (phone) {
-      await sendTwilioSMS(phone, result.reply, providerNumber);
+      await sendTwilioSMS(phone, reply, providerNumber);
     }
   } catch (error) {
     console.error('[SMS] Error processing Twilio message:', error.message || error);
   } finally {
     res.type('text/xml').send('<Response></Response>');
   }
+});
+
+app.post('/telegram/webhook', async (req, res) => {
+  if (!telegram.isConfigured()) {
+    return res.json({ ok: false, error: 'telegram_not_configured' });
+  }
+
+  if (telegram.TELEGRAM_WEBHOOK_SECRET) {
+    const headerToken = req.get('x-telegram-bot-api-secret-token');
+    if (headerToken !== telegram.TELEGRAM_WEBHOOK_SECRET) {
+      return res.status(401).json({ ok: false, error: 'unauthorized' });
+    }
+  }
+
+  try {
+    await handleTelegramUpdate(req.body || {});
+  } catch (error) {
+    console.error('[Telegram] Update processing failed:', error.message || error);
+  }
+
+  res.json({ ok: true });
 });
 
 app.post('/offer-room-waitlist', async (req, res) => {
@@ -810,7 +972,188 @@ app.get('/', (req, res) => {
   res.send('Marco home-ops concierge is running.');
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`[Marco] Home-ops server listening on ${PORT}`);
+// New Admin Endpoints
+
+// Middleware to check admin token
+function checkAdminToken(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  if (token !== ADMIN_API_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+}
+
+// GET /admin/vendors/search
+app.get('/admin/vendors/search', checkAdminToken, async (req, res) => {
+  const { category, area, status, limit = 10 } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT * FROM vendors WHERE 
+      ($1::text IS NULL OR $1 = ANY(trade_categories)) AND
+      ($2::text IS NULL OR $2 = ANY(service_areas)) AND
+      ($3::text IS NULL OR status = $3)
+      ORDER BY reliability_score DESC, responsiveness_score DESC
+      LIMIT $4`,
+      [category, area, status, limit]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /admin/vendors
+app.post('/admin/vendors', checkAdminToken, async (req, res) => {
+  const { name, phone, website, categories, service_areas, source } = req.body;
+  try {
+    await pool.query(
+      `INSERT INTO vendors (name, primary_phone, website, trade_categories, service_areas, source_name)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (primary_phone) DO UPDATE SET
+      name = EXCLUDED.name,
+      website = EXCLUDED.website,
+      trade_categories = EXCLUDED.trade_categories,
+      service_areas = EXCLUDED.service_areas,
+      source_name = EXCLUDED.source_name`,
+      [name, phone, website, categories, service_areas, source]
+    );
+    res.status(201).json({ message: 'Vendor upserted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /admin/vendors/import
+app.post('/admin/vendors/import', checkAdminToken, async (req, res) => {
+  const vendors = req.body;
+  try {
+    const queryText = `INSERT INTO vendors (name, primary_phone, primary_email, website, source_url, source_name, trade_categories, service_areas, license_number, rating, review_count, notes)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (primary_phone) DO UPDATE SET
+    name = EXCLUDED.name,
+    primary_email = EXCLUDED.primary_email,
+    website = EXCLUDED.website,
+    source_url = EXCLUDED.source_url,
+    source_name = EXCLUDED.source_name,
+    trade_categories = EXCLUDED.trade_categories,
+    service_areas = EXCLUDED.service_areas,
+    license_number = EXCLUDED.license_number,
+    rating = EXCLUDED.rating,
+    review_count = EXCLUDED.review_count,
+    notes = EXCLUDED.notes`;
+
+    const promises = vendors.map(vendor => {
+      const values = [
+        vendor.name,
+        vendor.primary_phone,
+        vendor.primary_email,
+        vendor.website,
+        vendor.source_url,
+        vendor.source_name,
+        vendor.trade_categories,
+        vendor.service_areas,
+        vendor.license_number,
+        vendor.rating,
+        vendor.review_count,
+        vendor.notes
+      ];
+      return pool.query(queryText, values);
+    });
+
+    await Promise.all(promises);
+    res.status(201).json({ message: 'Vendors imported successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /admin/requests/:id/vendor-candidates
+app.get('/admin/requests/:id/vendor-candidates', checkAdminToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT v.* FROM vendor_outreach_queue q
+      JOIN vendors v ON q.vendor_id = v.id
+      WHERE q.request_id = $1
+      ORDER BY q.rank ASC`,
+      [id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /admin/requests/:id/create-vendor-queue
+app.post('/admin/requests/:id/create-vendor-queue', checkAdminToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Logic to create vendor outreach queue
+    // Placeholder for actual implementation
+    res.status(201).json({ message: 'Vendor outreach queue created' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /admin/vendor-contact-events
+app.post('/admin/vendor-contact-events', checkAdminToken, async (req, res) => {
+  const { vendor_id, request_id, channel, direction, status, summary, raw_payload } = req.body;
+  try {
+    await pool.query(
+      `INSERT INTO vendor_contact_events (vendor_id, request_id, channel, direction, status, summary, raw_payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [vendor_id, request_id, channel, direction, status, summary, raw_payload]
+    );
+    res.status(201).json({ message: 'Contact event logged' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /admin/vendor-outreach-queue
+app.get('/admin/vendor-outreach-queue', checkAdminToken, async (req, res) => {
+  const { status, category, area } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT q.*, v.name, v.trade_categories, v.service_areas FROM vendor_outreach_queue q
+      JOIN vendors v ON q.vendor_id = v.id
+      WHERE ($1::text IS NULL OR q.status = $1) AND
+      ($2::text IS NULL OR $2 = ANY(v.trade_categories)) AND
+      ($3::text IS NULL OR $3 = ANY(v.service_areas))
+      ORDER BY q.created_at DESC`,
+      [status, category, area]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /admin/request-summary
+app.get('/admin/request-summary', checkAdminToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+        COUNT(*) FILTER (WHERE created_at > now() - interval '1 hour') AS last_1h,
+        COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours') AS last_24h,
+        COUNT(*) FILTER (WHERE created_at > now() - interval '7 days') AS last_7d
+      FROM requests`
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Server is running on port 3000');
 });
