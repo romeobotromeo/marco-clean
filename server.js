@@ -4,7 +4,24 @@ const rateLimit = require('express-rate-limit');
 const Anthropic = require('@anthropic-ai/sdk');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const telegram = require('./telegram');
+let telegram = null;
+try {
+  telegram = require('./telegram');
+} catch (error) {
+  console.warn('[Telegram] Relay disabled:', error.message || error);
+  telegram = {
+    TELEGRAM_PRIMARY_CHAT_ID: null,
+    TELEGRAM_CHIEF_CHAT_ID: null,
+    TELEGRAM_WEBHOOK_SECRET: null,
+    extractMessage: () => null,
+    formatSender: () => null,
+    isChatAllowed: () => false,
+    isConfigured: () => false,
+    sendMessage: async () => {
+      throw new Error('telegram_not_configured');
+    },
+  };
+}
 
 const app = express();
 
@@ -831,7 +848,8 @@ app.post('/sms-twilio', async (req, res) => {
     const reply = `Thanks for reaching out to join the Marco team. I’ll get your runner profile started. Book a quick founder chat with Josh here: ${RUNNER_CALENDLY_URL}. Reply with city/neighborhood, car access, phone type, and availability.`;
 
     if (phone) {
-      await sendTwilioSMS(phone, reply, providerNumber);
+      const fixedReply = `Thanks for reaching out to join the Marco team. I’ll get your runner profile started. Book a quick founder chat with Josh here: ${RUNNER_CALENDLY_URL}. Reply with city/neighborhood, car access, phone type, and availability.`;
+await sendTwilioSMS(phone, fixedReply, providerNumber);
     }
   } catch (error) {
     console.error('[SMS] Error processing Twilio message:', error.message || error);
