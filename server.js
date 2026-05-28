@@ -132,13 +132,24 @@ function extractNeighborhoodTags(text) {
 }
 
 function requireAdmin(req, res) {
-  if (!ADMIN_API_TOKEN) {
+  const envToken = typeof ADMIN_API_TOKEN === 'string' ? ADMIN_API_TOKEN.trim() : '';
+  if (!envToken) {
     res.status(500).json({ success: false, error: 'admin_token_unset' });
     return false;
   }
-  const header = req.get('Authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (token !== ADMIN_API_TOKEN) {
+  // Accept either `Authorization: Bearer <token>` or the bare token, and
+  // fall back to `x-admin-token` header for parity with other admin routes.
+  const authHeader = (req.get('Authorization') || '').trim();
+  let presented = '';
+  if (/^bearer\s+/i.test(authHeader)) {
+    presented = authHeader.replace(/^bearer\s+/i, '').trim();
+  } else if (authHeader) {
+    presented = authHeader;
+  } else {
+    const altHeader = (req.get('x-admin-token') || '').trim();
+    if (altHeader) presented = altHeader;
+  }
+  if (!presented || presented !== envToken) {
     res.status(401).json({ success: false, error: 'unauthorized' });
     return false;
   }
