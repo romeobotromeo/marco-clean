@@ -13,6 +13,7 @@ Text Marco is now a 24/7 home-operations desk. Anyone can text **(645) 206-3407*
 | Anthropic Claude (`claude-sonnet-4-5`) | Generates short operational replies + metadata for categorisation |
 | Sendblue | Primary SMS provider for the (645) number + outbound qualification pings |
 | Twilio | Backup/toll-free SMS provider for the (888) number |
+| Telegram Bot (`telegram.js`) | Relays Telegram messages between Romeo and the Chief of Staff once the bot webhook is configured |
 | Cloudflare Worker (`apps/live/marco-clean/textmarco-worker/worker.js`) | Serves marketing + `/runner` recruiting landing page |
 | Admin Reset Endpoint | `POST /admin/reset/:phone` with `Authorization: Bearer <ADMIN_API_TOKEN>` resets a conversation, optionally clearing history |
 
@@ -66,6 +67,13 @@ TWILIO_NUMBER=+18889007501
 PORT=3000
 ADMIN_API_TOKEN=super-secure-reset-key
 DEFAULT_RESET_MESSAGE="On it. Reset. Reply with what you need."
+
+# Telegram relay
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_PRIMARY_CHAT_ID=...            # Romeo's Telegram user ID (numeric)
+TELEGRAM_CHIEF_OF_STAFF_CHAT_ID=...     # Chief of Staff Telegram user ID (numeric)
+TELEGRAM_ALLOWED_CHAT_IDS=...           # optional comma-delimited whitelist (auto-populated with IDs above)
+TELEGRAM_WEBHOOK_SECRET=...             # optional secret token to validate Telegram webhook requests
 ```
 
 > **Why service role?** The server runs headless and needs to insert system records. Restrict this key at the network level (Render/Cloudflare environment variables only).
@@ -108,6 +116,24 @@ To test webhooks, run ngrok (or Cloudflared) and point Sendblue’s inbound webh
    - Persists the structured request + property info
    - Flags runner interest when applicable and upserts into `runners`
    - Sends the reply via the originating provider
+   - (Optional) Relays Telegram updates between Romeo and the Chief of Staff via `/telegram/webhook`
+
+### Telegram Relay Flow
+
+1. Create a Telegram Bot via [@BotFather](https://t.me/botfather) and grab the `TELEGRAM_BOT_TOKEN`.
+2. Locate the numeric chat IDs for Romeo and the Chief of Staff (use https://core.telegram.org/bots/api#obtaining-chat-ids or a helper bot like [@myidbot](https://t.me/myidbot)).
+3. Configure the environment variables above on Render (or your hosting platform).
+4. Point the Telegram webhook to your deployment:
+
+   ```bash
+   curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+     -d "url=https://<your-host>/telegram/webhook" \
+     -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}"   # optional but recommended
+   ```
+
+5. DM the bot `/start` from both Romeo and the Chief of Staff chats; it will confirm connection and thereafter relay messages.
+
+> **Note:** Only chats listed in `TELEGRAM_ALLOWED_CHAT_IDS` (plus the primary + chief IDs) are permitted to use the relay. Messages include metadata about the sender and support text, photos, voice notes, and other attachment types as labelled summaries.
 
 **Default greeting** for new numbers:
 
@@ -125,14 +151,21 @@ Emergency or safety language prompts a reminder to contact licensed professional
 
 | Path | Description |
 | --- | --- |
-| `/runner` | Cloudflare Worker route with the recruiting landing page, application form, and Calendly embed |
-| `/` → CTA | Primary landing now links to `/runner` via desktop header + mobile sticky CTA |
+| `https://runner.textmarco.com` | Cloudflare Pages deployment of `runner-landing.html`. Collects a lightweight waitlist via Formspree, streams analytics events into `window.runnerAnalytics`, and reveals Calendly after confirmation. |
+| `/runner` | Cloudflare Worker route with the full application form wired to `/runner/apply` (Supabase + Sendblue required). Use when you want structured intake instead of the waitlist. |
+| `/` → CTA | Primary marketing site CTA. Point this to whichever recruiting surface is active (Pages waitlist or Worker intake). |
 
-The form POSTs to the Render API (`/runner/apply`). On success the page:
+#### Cloudflare Pages variant (Formspree waitlist)
 
-1. Shows confirmation copy
-2. Reveals the Calendly inline widget (defaults to `https://calendly.com/marco-runner/intro-call` or override via `RUNNER_CALENDLY_URL`)
-3. Keeps the visitor in the DOM (no redirect) so we can iterate without pushing them off-site.
+- Form action: `https://formspree.io/f/xbldevoy`. Provide form name/phone/email; responses land in Formspree with metadata for manual follow-up.
+- Inline script normalises phone numbers, surfaces success/error copy, and pushes events via `window.runnerAnalytics.track(event, payload)`.
+- On success, the Calendly inline widget appears. The URL falls back to `window.__RUNNER_CALENDLY_URL` (set via Pages environment variable) but can be overridden by returning `{ "calendly": "https://calendly.com/..." }` in the Formspree JSON response.
+- Analytics fan-out: events queue locally and automatically forward to Plausible, PostHog, and Meta Pixel once those libraries are detected. Call `window.runnerAnalytics.register(handler)` to plug in additional destinations.
+- Attribution: hidden inputs capture UTM params (`utm_*` + `gclid`/`fbclid`), referrer, and landing URL, and emit a `runner_waitlist_attribution_ready` event for downstream pipelines.
+
+#### Worker `/runner` variant (Supabase-backed)
+
+When Supabase + Sendblue are live, the Worker route can still accept full applications. The details below apply to that flow.
 
 ### API endpoint
 
@@ -180,8 +213,18 @@ The endpoint gracefully no-ops if Supabase or Sendblue creds are missing, return
 
 ### Testing checklist
 
-- [ ] Load `https://textmarco.com/runner` and submit the form with a test number.
-- [ ] Verify `runner_applicants`, `runner_applicant_notes`, and `runners` rows populate via Supabase UI.
+**Cloudflare Pages waitlist (`runner-landing.html`):**
+
+- [ ] Load `https://runner.textmarco.com` (or preview) and submit the waitlist form with a test contact.
+- [ ] Confirm Formspree records the submission and notification email fires to the ops inbox.
+- [ ] Verify success copy renders, the submit button resets, and the Calendly widget appears with the expected URL.
+- [ ] Open browser devtools → console and confirm `window.runnerAnalytics.flush()` contains `runner_waitlist_submit`, `runner_waitlist_success`, and `runner_calendly_revealed` events.
+- [ ] If Plausible/PostHog/Meta Pixel are configured, confirm events arrive in their dashboards.
+- [ ] Run the analytics QA checklist in `apps/live/marco-clean/analytics-installation.md#6-qa-checklist` and log results in `STATE/current_state.md`.
+
+**Worker `/runner` intake (if enabled):**
+
+- [ ] Submit the Worker form and verify `runner_applicants`, `runner_applicant_notes`, and `runners` rows populate via Supabase UI.
 - [ ] Confirm automated SMS arrives from Sendblue and the contact picked up tags.
 - [ ] Ensure Calendly widget displays with the configured URL.
 - [ ] Run `/health` endpoint and confirm `updated: 'home-ops concierge + runner recruiting'`.
@@ -210,15 +253,18 @@ The single-page runner funnel now lives at `apps/live/marco-clean/runner-landing
 
 **Pre-launch checklist**
 
-1. **Configure analytics placeholders**
-   - Set `window.__META_PIXEL_ID = '<your_pixel_id>'` via an inline script before the Meta Pixel block or inject it server-side.
-   - Connect Plausible/Segment to `window.runnerAnalyticsQueue` if you need additional destinations.
-2. **Verify Formspree target**
-   - Submit a test entry and confirm the JSON response returns `{ "ok": true }` and the notification email fires.
-   - Update the Formspree form if you rotate API keys (`action="https://formspree.io/f/xbldevoy"`).
-3. **Smoke-test UX**
+1. **Configure environment variables**
+   - Set `window.__META_PIXEL_ID = '<pixel_id>'` in the Cloudflare Pages project (or inject it via a pre-script).
+   - Set `window.__RUNNER_CALENDLY_URL = '<calendly_url>'` so the inline widget points at the right calendar.
+   - If you need extra analytics sinks, call `window.runnerAnalytics.register(handler)` in a follow-up script.
+2. **Verify Formspree wiring**
+   - Submit a test entry and confirm Formspree returns `{ "ok": true }` and the notification email fires to ops.
+   - Rotate the Formspree action URL if you change projects (`action="https://formspree.io/f/xbldevoy"`).
+   - In devtools console run `window.runnerAnalytics.flush()` and confirm success/error events are recorded.
+3. **Smoke-test UX + Calendly**
    - Desktop and mobile (≤480px) renderings should show the CTA and status messaging without horizontal scroll.
-   - Confirm the inline status banner flips between success/error when you simulate failures (disable network in devtools).
+   - Toggle offline mode in devtools to confirm error messaging renders.
+   - After a successful submission, ensure the Calendly widget loads with the configured URL and can be booked end-to-end.
 
 **Cloudflare Pages fast deploy**
 
@@ -247,6 +293,33 @@ wrangler pages deploy tmp/runner-landing \
 * **Supabase**: Lock this project to your internal network. The service role key should never ship to clients.
 * **Sendblue**: Sandbox accounts require manually approving destination numbers. Production keys remove that restriction.
 * **Twilio** (optional): Provide SID/auth token only if you plan to keep the toll-free number active.
+
+---
+
+## Meta Lead Gen Import
+
+Use `scripts/import-leadgen.js` to load Meta lead form exports into Supabase and optionally send first-touch SMS from the customer number.
+
+```bash
+cd apps/live/marco-clean
+npm run leadgen:import -- --csv ./leadgen-import-template.csv
+```
+
+The default run imports into `users`, `requests`, and `messages` without sending texts. This is the safe review mode for checking how many rows will load and whether the CSV columns map correctly.
+
+To send outreach after explicit approval:
+
+```bash
+npm run leadgen:import -- --csv ./meta-leads.csv --source meta-lead-gen --send
+```
+
+Required env for import: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Required env for `--send`: `SENDBLUE_API_KEY`, `SENDBLUE_API_SECRET`, and optionally `SENDBLUE_FROM_NUMBER` (defaults to `+16452063407`).
+
+Accepted CSV headers include `name`, `first_name`, `last_name`, `phone`, `phone_number`, `email`, `city`, `neighborhood`, `address`, `issue`, `project`, `message`, `notes`, `campaign_name`, `ad_name`, and `form_name`.
+
+Default outreach copy:
+
+> Hi {{first_name}}, this is Marco. Thanks for reaching out about property help. What city/neighborhood is the property in, and what do you need handled first? You can reply here with a short note or photos.
 
 ---
 

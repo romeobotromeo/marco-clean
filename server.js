@@ -47,7 +47,7 @@ app.use((req, res, next) => {
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
-const DEFAULT_GREETING = "Hey, this is Marco. Tell me what you need help with around the home — repairs, prep, vendors, access, permits, inspections, or real estate support.";
+const DEFAULT_GREETING = "Thanks for texting Marco. We just launched and are in beta, so response times may vary, but we're on it. Hours are Mon-Fri 7a-6p. Text URGENT for after-hours support. Send the property address, what's going on, how soon you need help, and any photos.";
 const DEFAULT_RESET_MESSAGE = process.env.DEFAULT_RESET_MESSAGE || DEFAULT_GREETING;
 const RUNNER_GREETING = "Hey, this is Marco. Interested in runner work? Reply with your city, neighborhood, car access, phone type, and when you're usually available.";
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -518,9 +518,17 @@ function greetingForChannel(channel) {
 }
 
 function buildSystemPrompt(isNewContact, channel) {
-  const basePrompt = `You are Marco, a 24/7 home operations concierge handling requests for sellers, FSBO owners, agents, and homeowners.
+  const basePrompt = `You are Marco, a beta home operations concierge handling requests for sellers, FSBO owners, agents, and homeowners.
 
 You coordinate: seller prep, FSBO support, Offer Room tasks for agents, vendor meetups, property access, permits, plumbing, electrical, HVAC, handyman work, landscaping, brush clearing, cleaning and junk removal, inspection repair bids, off-market opportunities, and general homeowner coordination.
+
+Current expectation policy:
+- Marco just launched and is in beta. Response times may vary, but we are on it.
+- Standard support hours: Monday-Friday 7am-6pm.
+- For after-hours support, ask users to text URGENT.
+- For runner dispatch, collect discovery first: address, issue, urgency/timing, access, photos.
+- Tell users to allow 2-4 hours to schedule a runner unless a faster ETA is confirmed.
+- Do not promise a runner until availability is confirmed.
 
 Tone & rules:
 - Replies must be concise (<160 chars) and confident.
@@ -745,6 +753,12 @@ async function handleInboundMessage({ channel, phone, textBody, mediaUrl, provid
   }
 
   await logMessage(phone, 'inbound', normalizedBody || '[no text]', mediaUrl, rawPayload);
+
+// Add to waitlist
+await supabase.from('waitlist').insert({ phone, created_at: new Date().toISOString() });
+
+// Send auto-response
+await sendMessage(phone, "Thank you for reaching out. We're currently onboarding runners and you've been added to the waitlist. We'll reach out shortly with the next steps.");
 
   const resetSince = user?.conversation_reset_at || null;
   const history = await getMessageHistory(phone, 12, resetSince);
@@ -988,6 +1002,174 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
   res.send('Marco home-ops concierge is running.');
+});
+
+function coreAdmin(req, res, next) {
+  if (!requireAdmin(req, res)) return;
+  next();
+}
+
+const CORE_ENGINE_RESOURCES = {
+  signals: {
+    table: 'marco_signals',
+    order: 'created_at',
+    defaults: { status: 'new' },
+  },
+  'demand-clusters': {
+    table: 'demand_clusters',
+    order: 'updated_at',
+    defaults: { status: 'candidate' },
+  },
+  'build-queue': {
+    table: 'marco_build_queue',
+    order: 'updated_at',
+    defaults: { status: 'queued', priority: 'normal', approval_required: true, dry_run_status: 'not_started' },
+  },
+  'outreach-queue': {
+    table: 'outreach_queue',
+    order: 'updated_at',
+    defaults: { status: 'draft', dry_run: true, approval_status: 'pending' },
+  },
+  'gc-contacts': {
+    table: 'gc_contacts',
+    order: 'updated_at',
+    defaults: { state: 'CA', outreach_status: 'not_queued', sms_opt_out: false, call_opt_out: false },
+  },
+  'runner-video-interviews': {
+    table: 'runner_video_interviews',
+    order: 'created_at',
+    defaults: { consent_captured: false, reviewer_status: 'not_reviewed' },
+  },
+  economics: {
+    table: 'economics_estimates',
+    order: 'created_at',
+    defaults: { approval_needed: true },
+  },
+};
+
+function getCoreResource(name) {
+  return CORE_ENGINE_RESOURCES[name] || null;
+}
+
+function withCoreDefaults(resource, payload) {
+  return {
+    ...resource.defaults,
+    ...(payload && typeof payload === 'object' ? payload : {}),
+  };
+}
+
+app.get('/admin/core/:resource', coreAdmin, async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ success: false, error: 'supabase_unavailable' });
+  }
+
+  const resource = getCoreResource(req.params.resource);
+  if (!resource) {
+    return res.status(404).json({ success: false, error: 'unknown_resource' });
+  }
+
+  const limit = Math.min(Number(req.query.limit) || 50, 250);
+  let query = supabase
+    .from(resource.table)
+    .select('*')
+    .order(resource.order, { ascending: false })
+    .limit(limit);
+
+  ['status', 'approval_status', 'audience_type', 'actor_type', 'ask_category', 'category', 'city', 'state'].forEach((field) => {
+    if (req.query[field]) {
+      query = query.eq(field, req.query[field]);
+    }
+  });
+
+  const data = await supabaseQuery(query, []);
+  return res.json({ success: true, resource: req.params.resource, data });
+});
+
+app.post('/admin/core/:resource', coreAdmin, async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ success: false, error: 'supabase_unavailable' });
+  }
+
+  const resource = getCoreResource(req.params.resource);
+  if (!resource) {
+    return res.status(404).json({ success: false, error: 'unknown_resource' });
+  }
+
+  const rows = Array.isArray(req.body) ? req.body : [req.body];
+  const payload = rows.map((row) => withCoreDefaults(resource, row));
+
+  const { data, error } = await supabase
+    .from(resource.table)
+    .insert(payload)
+    .select('*');
+
+  if (error) {
+    console.error('[Core Engine] Insert failed:', error.message || error);
+    return res.status(400).json({ success: false, error: error.message || 'insert_failed' });
+  }
+
+  return res.status(201).json({ success: true, resource: req.params.resource, data });
+});
+
+app.patch('/admin/core/:resource/:id', coreAdmin, async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ success: false, error: 'supabase_unavailable' });
+  }
+
+  const resource = getCoreResource(req.params.resource);
+  if (!resource) {
+    return res.status(404).json({ success: false, error: 'unknown_resource' });
+  }
+
+  const payload = {
+    ...(req.body && typeof req.body === 'object' ? req.body : {}),
+  };
+  if (['demand_clusters', 'marco_build_queue', 'outreach_queue', 'gc_contacts'].includes(resource.table)) {
+    payload.updated_at = new Date().toISOString();
+  }
+
+  const { data, error } = await supabase
+    .from(resource.table)
+    .update(payload)
+    .eq('id', req.params.id)
+    .select('*')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[Core Engine] Update failed:', error.message || error);
+    return res.status(400).json({ success: false, error: error.message || 'update_failed' });
+  }
+
+  return res.json({ success: true, resource: req.params.resource, data });
+});
+
+app.post('/admin/core/outreach-queue/:id/approve', coreAdmin, async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ success: false, error: 'supabase_unavailable' });
+  }
+
+  const { data, error } = await supabase
+    .from('outreach_queue')
+    .update({
+      approval_status: 'approved',
+      status: 'approved_for_launch',
+      dry_run: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', req.params.id)
+    .select('*')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[Core Engine] Outreach approval failed:', error.message || error);
+    return res.status(400).json({ success: false, error: error.message || 'approval_failed' });
+  }
+
+  return res.json({
+    success: true,
+    data,
+    note: 'Approved for launch review only. This endpoint does not send calls, texts, posts, recordings, or spend.',
+  });
 });
 
 // New Admin Endpoints

@@ -28,7 +28,111 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
   <script defer data-domain="runner.textmarco.com" src="https://plausible.io/js/script.js"></script>
-  <script>window.runnerAnalyticsQueue = window.runnerAnalyticsQueue || [];</script>
+  <script>
+    window.__RUNNER_CALENDLY_URL = window.__RUNNER_CALENDLY_URL || null;
+    (function () {
+      if (window.runnerAnalytics && window.runnerAnalytics.__initialized) {
+        return;
+      }
+
+      const queue = window.runnerAnalyticsQueue = window.runnerAnalyticsQueue || [];
+      const handlers = window.runnerAnalyticsHandlers ? new Set(window.runnerAnalyticsHandlers) : new Set();
+
+      function dispatch(entry, persist = true) {
+        if (!entry || !entry.event) return;
+        if (persist) {
+          queue.push(entry);
+        }
+        if (typeof window.fbq === 'function') {
+          try {
+            window.fbq('trackCustom', entry.event, entry.payload || {});
+          } catch (error) {
+            console.warn('[runnerAnalytics] Meta Pixel dispatch failed', error);
+          }
+        }
+        handlers.forEach((handler) => {
+          try {
+            handler(entry);
+          } catch (handlerError) {
+            console.warn('[runnerAnalytics] handler error', handlerError);
+          }
+        });
+      }
+
+      const analytics = window.runnerAnalytics || {};
+      analytics.track = function (event, payload = {}) {
+        if (!event) return;
+        const entry = { event, payload, ts: Date.now() };
+        dispatch(entry, true);
+      };
+
+      analytics.register = function (handler, options = {}) {
+        if (typeof handler !== 'function') return;
+        handlers.add(handler);
+        if (options.replay !== false) {
+          queue.forEach((entry) => {
+            try {
+              handler(entry);
+            } catch (error) {
+              console.warn('[runnerAnalytics] replay error', error);
+            }
+          });
+        }
+      };
+
+      analytics.flush = function () {
+        return queue.slice();
+      };
+
+      analytics.__initialized = true;
+      window.runnerAnalytics = analytics;
+      window.runnerAnalyticsHandlers = Array.from(handlers);
+
+      function waitForIntegration(check, onReady, attempts = 40, interval = 250) {
+        if (typeof check !== 'function' || typeof onReady !== 'function') return;
+        if (check()) {
+          try {
+            onReady();
+          } catch (error) {
+            console.warn('[runnerAnalytics] integration error', error);
+          }
+          return;
+        }
+        if (attempts <= 0) return;
+        setTimeout(() => waitForIntegration(check, onReady, attempts - 1, interval), interval);
+      }
+
+      waitForIntegration(
+        () => typeof window.plausible === 'function',
+        () => {
+          const forwardToPlausible = (entry) => {
+            try {
+              window.plausible(entry.event, { props: entry.payload || {} });
+            } catch (error) {
+              console.warn('[runnerAnalytics] plausible forward error', error);
+            }
+          };
+          analytics.register(forwardToPlausible, { replay: false });
+          analytics.flush().forEach(forwardToPlausible);
+        }
+      );
+
+      waitForIntegration(
+        () => window.posthog && typeof window.posthog.capture === 'function',
+        () => {
+          const forwardToPosthog = (entry) => {
+            try {
+              window.posthog.capture(entry.event, entry.payload || {});
+            } catch (error) {
+              console.warn('[runnerAnalytics] posthog forward error', error);
+            }
+          };
+          analytics.register(forwardToPosthog, { replay: false });
+          analytics.flush().forEach(forwardToPosthog);
+        }
+      );
+    })();
+  </script>
   <!-- Meta Pixel (placeholder). Replace window.__META_PIXEL_ID before launch. -->
   <script>
     (function () {
@@ -461,6 +565,22 @@
       gap: 12px;
     }
 
+    .form-status {
+      margin: 0;
+      font-size: 0.9rem;
+      min-height: 1.2rem;
+      color: rgba(255, 255, 255, 0.74);
+      letter-spacing: 0.01em;
+    }
+
+    .form-status.success {
+      color: #9cf6d9;
+    }
+
+    .form-status.error {
+      color: #ffd1d1;
+    }
+
     .input-field {
       display: flex;
       flex-direction: column;
@@ -493,6 +613,48 @@
       color: var(--accent);
       border: none;
       box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+    }
+
+    .calendly-section {
+      margin-top: 24px;
+    }
+
+    .calendly-card {
+      position: relative;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(9, 15, 40, 0.45);
+      padding: 24px;
+      display: grid;
+      gap: 14px;
+      overflow: hidden;
+    }
+
+    .calendly-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 60%);
+    }
+
+    .calendly-card h3 {
+      margin: 0;
+      font-family: var(--font-head);
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      letter-spacing: -0.01em;
+    }
+
+    .calendly-card p {
+      margin: 0;
+      font-size: 0.96rem;
+      color: rgba(255, 255, 255, 0.78);
+      line-height: 1.6;
+    }
+
+    .calendly-inline-widget {
+      min-height: 620px;
+      width: 100%;
     }
 
     footer {
@@ -557,6 +719,10 @@
 
       .waitlist-form .btn {
         height: 100%;
+      }
+
+      .calendly-card {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -630,6 +796,10 @@
       .btn,
       .btn-secondary {
         width: 100%;
+      }
+
+      .calendly-inline-widget {
+        min-height: 580px;
       }
     }
   </style>
@@ -820,10 +990,26 @@
               <input id="phone" name="phone" type="tel" placeholder="(323) 555-0193" required>
             </div>
             <input type="hidden" name="form_name" value="Marco Runner Waitlist">
+            <input type="hidden" name="utm_source">
+            <input type="hidden" name="utm_medium">
+            <input type="hidden" name="utm_campaign">
+            <input type="hidden" name="utm_term">
+            <input type="hidden" name="utm_content">
+            <input type="hidden" name="gclid">
+            <input type="hidden" name="fbclid">
+            <input type="hidden" name="referrer">
+            <input type="hidden" name="landing_url">
             <input type="text" name="_honeypot" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;opacity:0" aria-hidden="true">
             <button class="btn btn-secondary" type="submit">Join the waitlist</button>
             <p class="form-status" role="status" aria-live="polite"></p>
           </form>
+          <div class="calendly-section" data-calendly-section hidden>
+            <div class="calendly-card">
+              <h3>Lock your onboarding call.</h3>
+              <p data-calendly-copy>Pick a 15-minute slot with Marco Ops to confirm your runner profile.</p>
+              <div class="calendly-inline-widget" data-calendly-container></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -838,25 +1024,45 @@
   </footer>
   <script>
     (function () {
-      function pushAnalytics(eventName, payload = {}) {
-        window.runnerAnalyticsQueue = window.runnerAnalyticsQueue || [];
-        window.runnerAnalyticsQueue.push({ event: eventName, payload, ts: Date.now() });
-        if (typeof window.fbq === 'function') {
-          window.fbq('trackCustom', eventName, payload);
-        }
+      const analytics = window.runnerAnalytics || {};
+      const track = typeof analytics.track === 'function'
+        ? (event, payload = {}) => analytics.track(event, payload)
+        : (event, payload = {}) => {
+            if (!event) return;
+            const entry = { event, payload, ts: Date.now() };
+            window.runnerAnalyticsQueue = window.runnerAnalyticsQueue || [];
+            window.runnerAnalyticsQueue.push(entry);
+            if (typeof window.fbq === 'function') {
+              try {
+                window.fbq('trackCustom', event, payload);
+              } catch (error) {
+                console.warn('[runnerAnalytics:fallback] Meta Pixel dispatch failed', error);
+              }
+            }
+          };
+
+      const defaultLabel = 'waitlist';
+      const defaultCalendlyUrl = window.__RUNNER_CALENDLY_URL || 'https://calendly.com/marco-runner/intro-call';
+
+      function sanitisePhone(value = '') {
+        return String(value).replace(/[^0-9+]/g, '');
       }
 
-      function sanitisePhone(value) {
-        return value.replace(/[^0-9+]/g, '');
+      function clearStatus(element) {
+        if (!element) return;
+        element.textContent = '';
+        element.classList.remove('success', 'error');
       }
 
       function markError(element, message) {
+        if (!element) return;
         element.textContent = message;
         element.classList.remove('success');
         element.classList.add('error');
       }
 
       function markSuccess(element, message) {
+        if (!element) return;
         element.textContent = message;
         element.classList.remove('error');
         element.classList.add('success');
@@ -864,44 +1070,182 @@
 
       document.querySelectorAll('[data-track="cta"]').forEach((el) => {
         el.addEventListener('click', () => {
-          pushAnalytics('runner_cta_click', { label: el.dataset.trackLabel || 'cta' });
+          track('runner_cta_click', { label: el.dataset.trackLabel || 'cta' });
         });
       });
 
       const form = document.querySelector('.waitlist-form');
-      if (!form) return;
+      if (!form) {
+        return;
+      }
 
+      const formLabel = form.dataset.trackLabel || defaultLabel;
       const statusMessage = form.querySelector('.form-status');
       const submitButton = form.querySelector('button[type="submit"]');
-      if (!statusMessage || !submitButton) return;
+      const calendlySection = document.querySelector('[data-calendly-section]');
+      const calendlyContainer = calendlySection?.querySelector('[data-calendly-container]');
+      const calendlyCopy = calendlySection?.querySelector('[data-calendly-copy]');
+      const calendlyCallbacks = [];
+      const searchParams = new URLSearchParams(window.location.search);
+
+      function setHiddenValue(name, value) {
+        if (!name) return;
+        const field = form.querySelector(`[name="${name}"]`);
+        if (!field) return;
+        field.value = value || '';
+      }
+
+      function prepareAttribution() {
+        const attributionPayload = {};
+        const attributionKeys = [
+          'utm_source',
+          'utm_medium',
+          'utm_campaign',
+          'utm_term',
+          'utm_content',
+          'gclid',
+          'fbclid',
+        ];
+
+        attributionKeys.forEach((key) => {
+          const value = searchParams.get(key);
+          if (value) {
+            setHiddenValue(key, value);
+            attributionPayload[key] = value;
+          }
+        });
+
+        const referrer = document.referrer || 'direct';
+        const landingUrl = window.location.href;
+        setHiddenValue('referrer', referrer);
+        setHiddenValue('landing_url', landingUrl);
+        attributionPayload.referrer = referrer;
+        attributionPayload.landing_url = landingUrl;
+
+        if (Object.keys(attributionPayload).length > 0) {
+          track('runner_waitlist_attribution_ready', { label: formLabel, ...attributionPayload });
+        }
+      }
+
+      function flushCalendlyCallbacks() {
+        if (!window.Calendly || typeof window.Calendly.initInlineWidget !== 'function') {
+          return;
+        }
+        while (calendlyCallbacks.length) {
+          const fn = calendlyCallbacks.shift();
+          try {
+            fn();
+          } catch (error) {
+            console.warn('[runnerCalendly] callback error', error);
+          }
+        }
+      }
+
+      function whenCalendlyReady(callback) {
+        if (typeof callback === 'function') {
+          calendlyCallbacks.push(callback);
+        }
+        flushCalendlyCallbacks();
+      }
+
+      function ensureCalendlyScript() {
+        if (window.Calendly && typeof window.Calendly.initInlineWidget === 'function') {
+          flushCalendlyCallbacks();
+          return;
+        }
+        if (ensureCalendlyScript.requested) {
+          return;
+        }
+        ensureCalendlyScript.requested = true;
+        track('runner_calendly_script_requested', { label: formLabel });
+        const script = document.createElement('script');
+        script.src = 'https://assets.calendly.com/assets/external/widget.js';
+        script.async = true;
+        script.onload = () => {
+          track('runner_calendly_script_loaded', { label: formLabel });
+          flushCalendlyCallbacks();
+        };
+        script.onerror = () => {
+          track('runner_calendly_script_error', { label: formLabel });
+          markError(statusMessage, 'Form received. Calendly is offline — ops will text you to schedule.');
+        };
+        document.head.appendChild(script);
+      }
+
+      function revealCalendly(url, metadata = {}) {
+        if (!calendlySection || !calendlyContainer) {
+          return;
+        }
+        const calendlyUrl = url || defaultCalendlyUrl;
+        if (!calendlyUrl) {
+          return;
+        }
+        calendlySection.hidden = false;
+        calendlySection.classList.add('active');
+        if (calendlyCopy && metadata.copy) {
+          calendlyCopy.textContent = metadata.copy;
+        }
+        track('runner_calendly_revealed', { url: calendlyUrl, label: metadata.label || formLabel });
+        whenCalendlyReady(() => {
+          if (!window.Calendly || typeof window.Calendly.initInlineWidget !== 'function') {
+            return;
+          }
+          if (calendlySection.dataset.widgetLoaded === calendlyUrl) {
+            return;
+          }
+          calendlyContainer.innerHTML = '';
+          window.Calendly.initInlineWidget({
+            url: calendlyUrl,
+            parentElement: calendlyContainer,
+            prefill: metadata.prefill || {},
+            utm: metadata.utm || {},
+          });
+          calendlySection.dataset.widgetLoaded = calendlyUrl;
+          track('runner_calendly_initialized', { url: calendlyUrl, label: metadata.label || formLabel });
+        });
+        ensureCalendlyScript();
+      }
+
+      track('runner_waitlist_view', { label: formLabel });
+      prepareAttribution();
+
+      if (!statusMessage || !submitButton) {
+        return;
+      }
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
         const formData = new FormData(form);
-        const name = formData.get('name')?.trim();
-        const email = formData.get('email')?.trim();
-        const phone = sanitisePhone(formData.get('phone') || '');
+        const name = formData.get('name')?.toString().trim();
+        const email = formData.get('email')?.toString().trim();
+        const phone = sanitisePhone(formData.get('phone'));
         const trap = formData.get('_honeypot');
 
         if (trap) {
           markError(statusMessage, 'Submission blocked. Please try again.');
+          track('runner_waitlist_spam_blocked', { label: formLabel });
           return;
         }
 
         if (!name || !email || !phone) {
           markError(statusMessage, 'Add your name, email, and phone so we can follow up.');
+          track('runner_waitlist_validation_error', { label: formLabel });
           return;
         }
 
         formData.set('name', name);
         formData.set('email', email);
         formData.set('phone', phone);
+        formData.set('source', formLabel);
 
         submitButton.disabled = true;
         submitButton.textContent = 'Sending...';
-        statusMessage.textContent = '';
-        statusMessage.classList.remove('success', 'error');
+        clearStatus(statusMessage);
+
+        track('runner_waitlist_submit', { label: formLabel });
+
+        const startedAt = Date.now();
 
         try {
           const response = await fetch(form.action, {
@@ -910,16 +1254,40 @@
             body: formData,
           });
 
+          const elapsedMs = Date.now() - startedAt;
+
           if (!response.ok) {
-            throw new Error('Request failed');
+            throw new Error(`Request failed with status ${response.status}`);
+          }
+
+          let result = {};
+          try {
+            result = await response.json();
+          } catch (parseError) {
+            result = {};
           }
 
           form.reset();
           markSuccess(statusMessage, 'You’re on the list. We’ll reach out as the LA cohort opens up.');
-          pushAnalytics('runner_waitlist_success', { email, phone_last4: phone.slice(-4), label: form.dataset.trackLabel || 'waitlist' });
+          track('runner_waitlist_success', {
+            label: formLabel,
+            email,
+            phone_last4: phone.slice(-4),
+            response_ms: elapsedMs,
+          });
+
+          const calendlyUrl = result.calendly || defaultCalendlyUrl;
+          revealCalendly(calendlyUrl, {
+            label: formLabel,
+            prefill: { email, name },
+          });
         } catch (error) {
+          console.error('[Runner waitlist] submission failed', error);
           markError(statusMessage, 'Could not submit right now. Text (645) 206-3407 and we’ll add you manually.');
-          pushAnalytics('runner_waitlist_error', { label: form.dataset.trackLabel || 'waitlist', error: error?.message || 'unknown' });
+          track('runner_waitlist_error', {
+            label: formLabel,
+            error: error?.message || 'unknown',
+          });
         } finally {
           submitButton.disabled = false;
           submitButton.textContent = 'Join the waitlist';

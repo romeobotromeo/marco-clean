@@ -37,7 +37,7 @@ module.exports = {
 
   // Giveaway
   smsKeyword:    'PALMERO',
-  smsNumber:     '(888) 900-7501',
+  smsNumber:     '+1 (888) 900-7501',
   giveawayPrize: '$50 gift card to Wild Crust Pizza',
 
   // Site identity

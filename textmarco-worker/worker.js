@@ -12,6 +12,10 @@ export default {
       return new Response(renderRunnerLanding(), { headers: CACHE_HEADERS });
     }
 
+    if (path === '/privacy') {
+      return new Response(renderPrivacyPolicy(), { headers: CACHE_HEADERS });
+    }
+
     return new Response(renderHome(), { headers: CACHE_HEADERS });
   },
 };
@@ -22,10 +26,10 @@ function renderHome() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Text Marco — Home operations handled by text message</title>
-  <meta name="description" content="Text Marco 24/7 for anything around a home. Repairs, access, permits, inspections, cleanups, and vendor coordination handled by SMS.">
-  <meta property="og:title" content="Text Marco — Home operations handled by text message">
-  <meta property="og:description" content="Text Marco is the 24/7 home operations service. Text (645) 206-3407 for urgent support around a home.">
+  <title>Text Marco — Property solutions, one text away</title>
+  <meta name="description" content="Text Marco for property maintenance, preparation, repairs, vendor coordination, and home-service help. Fix your property with one text.">
+  <meta property="og:title" content="Text Marco — Property solutions, one text away">
+  <meta property="og:description" content="Your property maintenance and preparation expert. Text (645) 206-3407 to get property work moving.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
@@ -515,9 +519,13 @@ function renderHome() {
     <section class="hero" id="home">
       <div class="container hero-grid">
         <div>
-          <div class="hero-eyebrow">24/7 home operations desk</div>
-          <h1>Text Marco what you need around a home.</h1>
-          <p class="hero-sub">Repairs, seller prep, vendors, permits, cleanups, access, inspections, and real estate support — handled by text.</p>
+          <div class="hero-eyebrow">Property solutions, one text away</div>
+          <h1>Fix your property with one text.</h1>
+          <p class="hero-sub">Your property maintenance and preparation expert. Text Marco for repairs, prep, vendors, cleanups, access, inspections, and real estate support.</p>
+          <div class="value-prop">
+            <h2>Everything around the home should be easier. Now it can be.</h2>
+            <p>Marco helps homeowners, agents, and property teams get real-world home tasks handled: repairs, prep, photos, vendor meetups, access, inspections, errands, and follow-up. Text Marco, tell us what needs to happen, and we’ll help coordinate the next step.</p>
+          </div>
           <div class="hero-cta">
             <a class="btn btn-primary" href="sms:+16452063407">Text Marco Now</a>
             <a class="btn btn-secondary" href="/runner">Become a Marco Runner</a>
@@ -553,7 +561,7 @@ function renderHome() {
     <section class="helps" id="helps">
       <div class="container">
         <h2 class="section-heading">What Marco helps with</h2>
-        <p class="section-subhead">Send the request over text. Marco lines up the people, paperwork, and follow through to keep the property moving.</p>
+        <p class="section-subhead">Send the request over text. Marco lines up the people, paperwork, and follow-through to keep the property moving.</p>
         <div class="help-grid">
           <div class="help-item">Seller prep</div>
           <div class="help-item">FSBO support</div>
@@ -637,7 +645,7 @@ function renderHome() {
           <h2 class="section-heading">Become a Marco Runner</h2>
           <p class="section-subhead">Get paid to help homes move. Earn $30/hr, work on demand, make your own hours, meet vendors, take photos, document visits, check properties, and help source providers.</p>
           <p class="runner-note">Selected applicants may qualify for a first-day advance or launch bonus after vetting and approval.</p>
-          <a class="btn btn-primary" href="sms:+16452063407&body=Runner%20Application">Apply to become a Marco Runner</a>
+          <a class="btn btn-primary" href="sms:+18889007501&body=START">Apply to become a Marco Runner</a>
         </div>
         <div class="runner-card" aria-hidden="true">
           <span class="hero-card-title">Runner checklist</span>
@@ -712,8 +720,8 @@ function renderHome() {
     </section>
     <section class="final-cta" id="cta">
       <div class="container">
-        <h2>Need something around a home?</h2>
-        <p>Text Marco and a 24/7 home operations team jumps in immediately.</p>
+        <h2>Property work, one text away.</h2>
+        <p>Text Marco and get repairs, prep, vendors, access, inspections, and cleanups moving.</p>
         <a class="btn btn-primary" href="sms:+16452063407">Text Marco</a>
       </div>
     </section>
@@ -722,6 +730,7 @@ function renderHome() {
     <div class="container footer-inner">
       <span><strong>Text Marco</strong> — 24/7 home operations service</span>
       <span>Primary line: (645) 206-3407</span>
+      <span><a href="/privacy">Privacy Policy</a></span>
       <span>© 2026 Text Marco. All rights reserved.</span>
     </div>
   </footer>
@@ -785,6 +794,67 @@ function renderHome() {
   </script>
 </body>
 </html>`;
+}
+
+function renderPrivacyPolicy() {
+  return [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="UTF-8">',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+    '  <title>Privacy Policy — Text Marco</title>',
+    '  <meta name="description" content="Privacy Policy for Text Marco.">',
+    '  <style>',
+    '    *, *::before, *::after { box-sizing: border-box; }',
+    '    body { margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #F8F6F2; color: #111; line-height: 1.65; }',
+    '    .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 72px; }',
+    '    a { color: inherit; }',
+    '    .back { display: inline-block; margin-bottom: 32px; color: #555; text-decoration: none; font-size: 0.95rem; }',
+    '    .card { background: #fff; border: 1px solid #E7E3DB; border-radius: 18px; padding: 34px; }',
+    '    h1 { font-size: clamp(2.2rem, 7vw, 4rem); line-height: 1.05; margin: 0 0 12px; letter-spacing: -0.02em; }',
+    '    h2 { font-size: 1.15rem; margin: 32px 0 8px; }',
+    '    p, li { color: #555; font-size: 1rem; }',
+    '    ul { padding-left: 22px; }',
+    '    .updated { color: #555; margin-bottom: 28px; }',
+    '  </style>',
+    '</head>',
+    '<body>',
+    '  <main class="wrap">',
+    '    <a class="back" href="/">Back to Text Marco</a>',
+    '    <section class="card">',
+    '      <h1>Privacy Policy</h1>',
+    '      <p class="updated">Last updated: May 17, 2026</p>',
+    '      <p>Text Marco provides property maintenance, preparation, coordination, runner dispatch, and related home-operations support. This Privacy Policy explains what information we collect, how we use it, and the choices you have.</p>',
+    '      <h2>Information We Collect</h2>',
+    '      <p>We may collect information you provide directly, including your name, phone number, email address, property address, service request details, access notes, photos, videos, messages, scheduling information, and payment-related information if you purchase a service.</p>',
+    '      <h2>How We Use Information</h2>',
+    '      <p>We use information to respond to inquiries, coordinate property services, schedule runners or vendors, document requests, provide customer support, improve our services, measure advertising performance, prevent misuse, and comply with legal obligations.</p>',
+    '      <h2>SMS And Communications</h2>',
+    '      <p>When you text Marco or provide your phone number, we may reply by SMS or phone about your request, scheduling, service updates, and related follow-up. Message and data rates may apply. You can reply STOP to opt out of non-essential SMS messages.</p>',
+    '      <h2>Photos, Videos, And Property Information</h2>',
+    '      <p>If you send photos, videos, property addresses, or access details, we use them to understand the request, coordinate service, document conditions, and communicate with runners, vendors, or service providers involved in the request.</p>',
+    '      <h2>Analytics And Advertising</h2>',
+    '      <p>We may use website analytics, advertising pixels, cookies, UTM parameters, and similar technologies to understand site traffic, measure ad performance, and improve our marketing. These tools may collect device, browser, referral, and interaction data.</p>',
+    '      <h2>How We Share Information</h2>',
+    '      <p>We may share information with service providers, runners, vendors, contractors, payment processors, analytics providers, advertising platforms, and communication tools as needed to operate Marco and fulfill your request. We do not sell your personal information for money.</p>',
+    '      <h2>Data Retention</h2>',
+    '      <p>We retain information for as long as needed to provide services, maintain records, improve operations, resolve disputes, and comply with legal obligations. We may keep request history so future property work can be handled more effectively.</p>',
+    '      <h2>Security</h2>',
+    '      <p>We use reasonable technical and operational measures to protect information. No system is perfectly secure, and you should avoid sending sensitive information that is not needed for the service request.</p>',
+    '      <h2>Your Choices</h2>',
+    '      <p>You can ask us to update, delete, or provide access to personal information where required by applicable law. You can also opt out of non-essential texts by replying STOP.</p>',
+    '      <h2>Children</h2>',
+    '      <p>Marco is not intended for children under 13, and we do not knowingly collect personal information from children under 13.</p>',
+    '      <h2>Changes</h2>',
+    '      <p>We may update this Privacy Policy from time to time. The updated version will be posted on this page with a new effective date.</p>',
+    '      <h2>Contact</h2>',
+    '      <p>Questions about this Privacy Policy can be sent to <a href="mailto:marco@textmarco.com">marco@textmarco.com</a> or by texting Marco at <a href="sms:+16452063407">(645) 206-3407</a>.</p>',
+    '    </section>',
+    '  </main>',
+    '</body>',
+    '</html>',
+  ].join('\n');
 }
 
 function renderRunnerLanding() {
@@ -1310,6 +1380,23 @@ function renderRunnerLanding() {
       </div>
     </section>
 
+    <section>
+      <div class="container grid two-col">
+        <div class="info-block">
+          <h2 class="section-heading">Built from real property work.</h2>
+          <p class="section-sub">Marco is being built by Josh Gibson, a Southern California real estate operator and founder behind Gibson House. We’re solving a problem we run into every day: property work is messy, local, time-sensitive, and hard to coordinate from behind a desk.</p>
+          <p class="form-note">Marco connects homeowners, agents, vendors, and local runners so real-world property tasks actually get done: photos, access, vendor meetups, open-house prep, repairs, documentation, and follow-up.</p>
+          <p class="form-note">This runner program is the field layer of Marco. If you’re reliable, curious, and good at showing up, we want to meet you.</p>
+          <a class="btn btn-secondary" href="https://www.instagram.com/gibson.house/" target="_blank" rel="noopener noreferrer">View Gibson House on Instagram</a>
+        </div>
+        <div class="info-block">
+          <h3 class="section-heading">Latest from Gibson House</h3>
+          <p class="form-note">Want to get a feel for us before applying? Check out Gibson House on Instagram.</p>
+          <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/gibson.house/?utm_source=ig_embed&utm_campaign=loading" data-instgrm-version="14"></blockquote>
+        </div>
+      </div>
+    </section>
+
     <section class="form-section" id="apply">
       <div class="container">
         <div class="form-card">
@@ -1371,7 +1458,7 @@ function renderRunnerLanding() {
             <input type="hidden" name="source" value="runner-landing" />
             <button class="btn btn-primary" type="submit">Send application</button>
             <p class="form-feedback" data-feedback></p>
-            <p class="form-note">We text from (645) 206-3407. Watch your phone — we qualify fast and get you on the schedule.</p>
+            <p class="form-note">We text from +1 (888) 900-7501. Watch your phone — we qualify fast and get you on the schedule.</p>
           </form>
           <div class="calendly-block" data-calendly-block data-calendly-url="https://calendly.com/marco-runner/intro-call">
             <div class="calendly-inline-widget" style="min-width:320px;height:760px;"></div>
@@ -1453,12 +1540,12 @@ function renderRunnerLanding() {
   <footer>
     <div class="footer-inner">
       <span><strong>Marco</strong> — Home operations, handled.</span>
-      <span>Texts come from (645) 206-3407 · marco@textmarco.com</span>
+      <span>Texts come from +1 (888) 900-7501 · marco@textmarco.com</span>
       <span>© ${new Date().getFullYear()} Marco Ops. All rights reserved.</span>
     </div>
   </footer>
   <div class="mobile-cta">
-    <a href="#apply">Apply to be a Runner</a>
+    <a href="/">← Back to Home Concierge</a>
   </div>
   <script>
     (function () {
@@ -1526,7 +1613,7 @@ function renderRunnerLanding() {
           }
         } catch (error) {
           console.error('[Runner Apply] failed', error);
-          setFeedback('Could not submit right now. Text (645) 206-3407 and we’ll onboard you manually.', 'error');
+          setFeedback('Could not submit right now. Text START to +1 (888) 900-7501 and we’ll onboard you manually.', 'error');
         } finally {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Send application';
@@ -1534,6 +1621,7 @@ function renderRunnerLanding() {
       });
     })();
   </script>
+  <script async src="https://www.instagram.com/embed.js"></script>
   <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js" async></script>
 </body>
 </html>`;

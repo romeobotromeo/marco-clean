@@ -8,21 +8,20 @@
 ## Current state
 - Sendblue 623 number: WORKING
 - Twilio 888 number: Approved, needs setup
-- Database: Render PostgreSQL (marco-db)
+- Database: Supabase. Render PostgreSQL was removed from the current app path.
 - Server: Render (marco-clean)
 
 ## Key files
-- server.js — main webhook handlers
-- template-engine.js — generates site HTML from business info
-- cloudflare-deployer.js — deploys sites to Cloudflare Pages
-- landing-page.html — marketing landing page (served at /dellvale)
-- migrations/001_add_site_columns.sql — adds site_subdomain + site_html columns
+- server.js — main webhook handlers and Supabase persistence
+- supabase-schema.sql — current database schema
+- textmarco-worker/worker.js — Cloudflare Worker for the public marketing/runner pages
+- README.md — current setup, environment, and deployment notes
 
 ## Architecture
 - Two SMS providers: SendBlue (623) + Twilio (888 toll-free)
-- sendReply() routes to correct provider based on which number the convo came in on
-- Conversation state machine: inbound SMS → home_ops triage → internal ops follow-up
-- Sites saved to DB (site_html), disk (sites/*.html), and Cloudflare Pages
+- /sms handles Sendblue inbound messages; /sms-twilio handles Twilio inbound messages
+- Conversation flow: inbound SMS -> home-ops triage -> Supabase persistence -> SMS reply/internal ops follow-up
+- No current Render PostgreSQL dependency. Persistence requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
 
 ## Active Render services
 - marco-clean.onrender.com — THE active server (this codebase). All webhooks should point here.
@@ -48,7 +47,8 @@
 - CORS: marco-clean was blocking requests from textmarco.com — FIXED in server.js (needs deploy)
 
 ## Environment variables required
-- DATABASE_URL — Render PostgreSQL connection string
+- SUPABASE_URL — Supabase project URL
+- SUPABASE_SERVICE_ROLE_KEY — Supabase server-side service role key
 - ANTHROPIC_API_KEY — Claude API
 - SENDBLUE_API_KEY + SENDBLUE_API_SECRET — SendBlue SMS (623 number)
 - TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN — Twilio SMS (888 number)

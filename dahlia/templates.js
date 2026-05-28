@@ -675,7 +675,7 @@ function builtWithTextmarcoPage() {
   <span class="section-label">Built with</span>
   <h1 class="display">Text<br><em class="display-italic">Marco</em></h1>
   <p style="font-size:0.85rem; color:var(--muted); line-height:1.85; margin-top:1.5rem;">This property site was built using TextMarco — a platform that lets real estate professionals build beautiful listing sites by text message. No designers, no developers, no waiting.</p>
-  <p style="font-size:0.85rem; color:var(--muted); line-height:1.85; margin-top:1rem;">Text Marco to get started: <strong>(888) 900-7501</strong></p>
+  <p style="font-size:0.85rem; color:var(--muted); line-height:1.85; margin-top:1rem;">Text Marco to get started: <strong>+1 (888) 900-7501</strong></p>
   <a href="https://textmarco.com" style="display:inline-block; margin-top:2rem; font-size:0.7rem; letter-spacing:0.15em; text-transform:uppercase; border-bottom: 0.5px solid var(--ink); padding-bottom:0.25rem;">Visit TextMarco →</a>
 </div>`;
 
