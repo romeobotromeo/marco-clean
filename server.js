@@ -494,24 +494,122 @@ async function sendSendblueSMS(to, content, fromNumber) {
   });
 }
 
-async function sendTwilioSMS(to, content, fromNumber) {
+async function sendTwilioSMS(to, content, fromNumber, mediaUrls) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!accountSid || !authToken) {
     console.warn('[Twilio] Credentials missing; SMS not sent.');
-    return;
+    return null;
   }
   const body = new URLSearchParams({
     To: to,
     From: fromNumber || process.env.TWILIO_NUMBER || '+18889007501',
     Body: content,
   });
-  await axios.post(
+  // Optional MMS: pass mediaUrls as a string or array of public https URLs.
+  // Twilio accepts repeated MediaUrl form fields (up to 10).
+  if (mediaUrls) {
+    const list = Array.isArray(mediaUrls) ? mediaUrls : [mediaUrls];
+    list
+      .filter((url) => typeof url === 'string' && url.trim().length > 0)
+      .slice(0, 10)
+      .forEach((url) => body.append('MediaUrl', url.trim()));
+  }
+  const response = await axios.post(
     `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
     body,
     { auth: { username: accountSid, password: authToken } }
   );
+  return response?.data || null;
 }
+
+// POST /admin/outbound/twilio-mms
+// Auth: Authorization: Bearer <ADMIN_API_TOKEN>
+// Body: { to: "+1...", body: "...", mediaUrl?: string|string[], from?: "+1...", dryRun?: true }
+// Default: dryRun=true. Set dryRun=false to actually send.
+// Sends to ONE recipient only. Batch sending is a separate route to be added later.
+app.post('/admin/outbound/twilio-mms', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  const rawTo = req.body?.to;
+  const messageBody = typeof req.body?.body === 'string' ? req.body.body : '';
+  const mediaUrlInput = req.body?.mediaUrl;
+  const fromOverride = req.body?.from || null;
+  // Default to dry-run unless explicitly set to false.
+  const dryRun = req.body?.dryRun === false ? false : true;
+
+  const to = normalizePhone(rawTo);
+  if (!to) {
+    return res.status(400).json({ success: false, error: 'invalid_to' });
+  }
+  if (!messageBody.trim()) {
+    return res.status(400).json({ success: false, error: 'missing_body' });
+  }
+
+  const mediaList = mediaUrlInput
+    ? (Array.isArray(mediaUrlInput) ? mediaUrlInput : [mediaUrlInput])
+        .filter((url) => typeof url === 'string' && /^https:\/\//i.test(url.trim()))
+        .map((url) => url.trim())
+    : [];
+
+  const from = fromOverride || process.env.TWILIO_NUMBER || '+18889007501';
+
+  const preview = {
+    to,
+    from,
+    body: messageBody,
+    body_length: messageBody.length,
+    media_url: mediaList,
+    media_count: mediaList.length,
+    twilio_credentials_present: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+  };
+
+  if (dryRun) {
+    console.log(`[Outbound] DRY-RUN twilio-mms to=${to} from=${from} media=${mediaList.length}`);
+    return res.json({ success: true, dryRun: true, preview });
+  }
+
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+    return res.status(500).json({ success: false, error: 'twilio_credentials_missing', preview });
+  }
+
+  try {
+    const result = await sendTwilioSMS(to, messageBody, from, mediaList);
+    console.log(`[Outbound] LIVE twilio-mms sent to=${to} sid=${result?.sid || 'unknown'}`);
+    // Log to messages table for audit. Direction = "outbound".
+    try {
+      await logMessage(to, 'outbound', messageBody, mediaList[0] || null, {
+        provider: 'twilio',
+        from,
+        media_urls: mediaList,
+        twilio_sid: result?.sid || null,
+        twilio_status: result?.status || null,
+        source: 'admin/outbound/twilio-mms',
+      });
+    } catch (logErr) {
+      console.error('[Outbound] logMessage failed:', logErr.message || logErr);
+    }
+    return res.json({
+      success: true,
+      dryRun: false,
+      preview,
+      twilio: {
+        sid: result?.sid || null,
+        status: result?.status || null,
+        date_created: result?.date_created || null,
+      },
+    });
+  } catch (error) {
+    const errBody = error.response?.data || { message: error.message };
+    console.error('[Outbound] LIVE twilio-mms failed:', errBody);
+    return res.status(502).json({
+      success: false,
+      error: 'twilio_send_failed',
+      preview,
+      details: errBody,
+    });
+  }
+});
 
 function greetingForChannel(channel) {
   return channel === 'twilio' ? RUNNER_GREETING : DEFAULT_GREETING;
