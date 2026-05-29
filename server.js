@@ -993,15 +993,15 @@ app.post('/sms', async (req, res) => {
   }
 });
 
-// Campaign-aware inbound for the Glenalbyn / TextMarco beta blast.
+// Campaign-aware inbound for the Glenalbyn open-house campaign.
 // Behavior:
 // 1. STOP/UNSUBSCRIBE/CANCEL/END/QUIT  -> log inbound, mark users.opt_out=true,
 //    do NOT send any auto-reply (Twilio handles the STOP confirmation itself).
 // 2. Anything else  -> log inbound, mark users as engaged/campaign_interested,
-//    send the beta acknowledgement reply (no Calendly, no runner, no offers).
+//    send the open-house details and direct Josh contact.
 // We deliberately do NOT call upsertRunnerApplicant for this campaign window.
 const STOP_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'opt out', 'optout']);
-const CAMPAIGN_ACK_REPLY = "Thanks — we’re in beta and almost ready to launch. Appreciate the interest. Once we’re live, we’ll ping you here.";
+const CAMPAIGN_ACK_REPLY = "It’s 3761 Glenalbyn Dr in Mount Washington. Open Sat + Sun 1–4PM. Details/flyer: https://3761glenalbyn.textmarco.com/ — Josh is at 310-295-1136 if you want to connect directly.";
 const CAMPAIGN_TAG = 'campaign:3761-glenalbyn-open-house-2026-05';
 
 app.post('/sms-twilio', async (req, res) => {
