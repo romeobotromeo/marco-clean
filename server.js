@@ -461,6 +461,50 @@ async function recordRunnerInterest(phone, analysis) {
   );
 }
 
+async function markCampaignOptOut(phone) {
+  if (!supabase || !phone) return;
+  const now = new Date().toISOString();
+  const richUpdate = await supabase.from('users').upsert({
+    phone,
+    opt_out: true,
+    opt_out_at: now,
+    last_active_at: now,
+    engagement_status: 'opted_out',
+  }, { onConflict: 'phone' });
+
+  if (!richUpdate.error) return;
+
+  await supabaseQuery(
+    supabase.from('users').upsert({
+      phone,
+      last_active_at: now,
+      last_category: 'opted_out',
+    }, { onConflict: 'phone' })
+  );
+}
+
+async function markCampaignInterested(phone) {
+  if (!supabase || !phone) return;
+  const now = new Date().toISOString();
+  const richUpdate = await supabase.from('users').upsert({
+    phone,
+    engagement_status: 'campaign_interested',
+    last_campaign: CAMPAIGN_TAG,
+    last_active_at: now,
+  }, { onConflict: 'phone' });
+
+  if (!richUpdate.error) return;
+
+  await supabaseQuery(
+    supabase.from('users').upsert({
+      phone,
+      last_active_at: now,
+      last_category: 'campaign_interested',
+      last_urgency: 'normal',
+    }, { onConflict: 'phone' })
+  );
+}
+
 async function clearConversationReset(phone) {
   if (!supabase) return;
   await supabaseQuery(
@@ -863,6 +907,35 @@ async function handleInboundMessage({ channel, phone, textBody, mediaUrl, provid
 
   await logMessage(phone, 'inbound', normalizedBody || '[no text]', mediaUrl, rawPayload);
 
+  if (channel === 'twilio') {
+    const isStop = STOP_KEYWORDS.has(normalizedBody.toLowerCase());
+    console.log(`[InboundBranch] route=handleInboundMessage channel=twilio phone=${phone} stop=${isStop}`);
+    if (isStop) {
+      await markCampaignOptOut(phone);
+      console.log(`[SMS] STOP received from ${phone}; no runner flow triggered.`);
+      return { reply: null, analysis: { category: 'opted_out' }, providerNumber };
+    }
+
+    await markCampaignInterested(phone);
+    await logMessage(phone, 'outbound', CAMPAIGN_ACK_REPLY, null, {
+      provider: 'twilio',
+      from: providerNumber,
+      to: phone,
+      campaign: CAMPAIGN_TAG,
+      source: 'twilio fallback auto-reply',
+    });
+
+    return {
+      reply: CAMPAIGN_ACK_REPLY,
+      analysis: {
+        category: 'campaign_interested',
+        urgency: 'normal',
+        runner_interest: false,
+      },
+      providerNumber,
+    };
+  }
+
 // Add to waitlist
 await supabase.from('waitlist').insert({ phone, created_at: new Date().toISOString() });
 
@@ -873,38 +946,6 @@ await sendMessage(phone, "Thank you for reaching out. We're currently onboarding
   const history = await getMessageHistory(phone, 12, resetSince);
   const isResetContact = !!resetSince && history.length <= 1;
   const effectiveIsNewContact = isNew || isResetContact;
-
-  if (channel === 'twilio') {
-    const applicant = await upsertRunnerApplicant({
-      phone,
-      intro: normalizedBody,
-      source: 'twilio-888',
-    });
-    if (applicant?.id && normalizedBody) {
-      await appendApplicantNote(applicant.id, `Inbound 888 runner text: "${normalizedBody}"`, { author: 'marco-sms' });
-    }
-
-    const agentResult = {
-      reply: `Thanks for reaching out to join the Marco team. I’ll get your runner profile started. Book a quick founder chat with Josh here: ${RUNNER_CALENDLY_URL}. Reply with city/neighborhood, car access, phone type, and availability.`,
-      category: 'runner',
-      urgency: 'normal',
-      needs: { address: false, timing: true, access: false, budget: false, photos: false },
-      runner_interest: true,
-      property_address: null,
-      notes: '888 runner applicant intake',
-    };
-
-    await updateUserProfile(phone, agentResult);
-    await recordRequest(phone, agentResult, normalizedBody);
-    await recordRunnerInterest(phone, agentResult);
-    await logMessage(phone, 'outbound', agentResult.reply, null, null);
-
-    if (resetSince) {
-      await clearConversationReset(phone);
-    }
-
-    return { reply: agentResult.reply, analysis: agentResult, providerNumber };
-  }
 
   const agentResult = await runHomeOpsAgent({ history, isNewContact: effectiveIsNewContact, channel });
 
@@ -952,27 +993,77 @@ app.post('/sms', async (req, res) => {
   }
 });
 
+// Campaign-aware inbound for the Glenalbyn / TextMarco beta blast.
+// Behavior:
+// 1. STOP/UNSUBSCRIBE/CANCEL/END/QUIT  -> log inbound, mark users.opt_out=true,
+//    do NOT send any auto-reply (Twilio handles the STOP confirmation itself).
+// 2. Anything else  -> log inbound, mark users as engaged/campaign_interested,
+//    send the beta acknowledgement reply (no Calendly, no runner, no offers).
+// We deliberately do NOT call upsertRunnerApplicant for this campaign window.
+const STOP_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'opt out', 'optout']);
+const CAMPAIGN_ACK_REPLY = "Thanks — we’re in beta and almost ready to launch. Appreciate the interest. Once we’re live, we’ll ping you here.";
+const CAMPAIGN_TAG = 'campaign:3761-glenalbyn-open-house-2026-05';
+
 app.post('/sms-twilio', async (req, res) => {
   const phone = normalizePhone(req.body.From);
   const providerNumber = normalizePhone(req.body.To || process.env.TWILIO_NUMBER);
   const textBody = req.body.Body || '';
+  const normalizedBody = textBody.trim();
+  const lowerBody = normalizedBody.toLowerCase();
+  const isStop = STOP_KEYWORDS.has(lowerBody);
 
   try {
-    // Bypass general AI agent and send fixed runner onboarding reply
-    const applicant = await upsertRunnerApplicant({
-      phone,
-      intro: textBody,
-      source: 'twilio-888',
-    });
-    if (applicant?.id && textBody) {
-      await appendApplicantNote(applicant.id, `Inbound 888 runner text: "${textBody}"`, { author: 'marco-sms' });
+    console.log(`[InboundBranch] route=/sms-twilio phone=${phone || 'unknown'} stop=${isStop}`);
+    // Always log the inbound first, regardless of intent.
+    if (phone) {
+      try {
+        await ensureUserRecord(phone);
+        await logMessage(phone, 'inbound', normalizedBody || '[no text]', null, {
+          provider: 'twilio',
+          from: phone,
+          to: providerNumber,
+          campaign: CAMPAIGN_TAG,
+          is_stop: isStop,
+          source: '/sms-twilio',
+          raw: req.body,
+        });
+      } catch (logErr) {
+        console.error('[SMS] Inbound log failed:', logErr.message || logErr);
+      }
     }
 
-    const reply = `Thanks for reaching out to join the Marco team. I’ll get your runner profile started. Book a quick founder chat with Josh here: ${RUNNER_CALENDLY_URL}. Reply with city/neighborhood, car access, phone type, and availability.`;
+    if (isStop) {
+      // Mark contact as opted out in our DB. Twilio enforces the actual block
+      // and sends its own confirmation message; we do NOT send anything back.
+      try {
+        await markCampaignOptOut(phone);
+      } catch (optErr) {
+        console.error('[SMS] STOP opt-out flag failed:', optErr.message || optErr);
+      }
+      console.log(`[SMS] STOP received from ${phone}; Twilio will handle confirmation.`);
+      return res.type('text/xml').send('<Response></Response>');
+    }
+
+    // Non-STOP reply: mark as engaged on the Glenalbyn campaign and ack.
+    try {
+      await markCampaignInterested(phone);
+    } catch (engErr) {
+      console.error('[SMS] Engagement flag failed:', engErr.message || engErr);
+    }
 
     if (phone) {
-      const fixedReply = `Thanks for reaching out to join the Marco team. I’ll get your runner profile started. Book a quick founder chat with Josh here: ${RUNNER_CALENDLY_URL}. Reply with city/neighborhood, car access, phone type, and availability.`;
-await sendTwilioSMS(phone, fixedReply, providerNumber);
+      await sendTwilioSMS(phone, CAMPAIGN_ACK_REPLY, providerNumber);
+      try {
+        await logMessage(phone, 'outbound', CAMPAIGN_ACK_REPLY, null, {
+          provider: 'twilio',
+          from: providerNumber,
+          to: phone,
+          campaign: CAMPAIGN_TAG,
+          source: '/sms-twilio auto-reply',
+        });
+      } catch (outLogErr) {
+        console.error('[SMS] Outbound ack log failed:', outLogErr.message || outLogErr);
+      }
     }
   } catch (error) {
     console.error('[SMS] Error processing Twilio message:', error.message || error);
@@ -1106,6 +1197,8 @@ app.get('/health', (req, res) => {
     supabase: !!supabase,
     anthropic: !!anthropic.apiKey,
     updated: 'home-ops concierge + runner recruiting',
+    commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
+    service: process.env.RENDER_SERVICE_NAME || null,
   });
 });
 
