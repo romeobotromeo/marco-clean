@@ -999,10 +999,10 @@ app.post('/sms', async (req, res) => {
 // 1. STOP/UNSUBSCRIBE/CANCEL/END/QUIT  -> log inbound, mark users.opt_out=true,
 //    do NOT send any auto-reply (Twilio handles the STOP confirmation itself).
 // 2. Anything else  -> log inbound, mark users as engaged/campaign_interested,
-//    send the open-house details and direct Josh contact.
+//    send the owner-approved fixed acknowledgment.
 // We deliberately do NOT call upsertRunnerApplicant for this campaign window.
 const STOP_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'opt out', 'optout']);
-const CAMPAIGN_ACK_REPLY = "2961 Angus St, Silver Lake. Open House Sat Nov 21 & Sun Nov 22, 1-5 PM both days. Photos and details: https://redf.in/FcMoak — Josh Gibson, West Shores Realty. Reply STOP to opt out.";
+const CAMPAIGN_ACK_REPLY = "See you this weekend.";
 const CAMPAIGN_TAG = 'campaign:2961-angus-open-house-2026-11';
 
 // Reply only to people who received this campaign. Old campaigns and runner
