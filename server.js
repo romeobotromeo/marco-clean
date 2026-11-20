@@ -916,6 +916,7 @@ async function handleInboundMessage({ channel, phone, textBody, mediaUrl, provid
       return { reply: null, analysis: { category: 'opted_out' }, providerNumber };
     }
 
+    if (!(await hasCurrentCampaignOutbound(phone))) return { reply: null, providerNumber };
     await markCampaignInterested(phone);
     await logMessage(phone, 'outbound', CAMPAIGN_ACK_REPLY, null, {
       provider: 'twilio',
@@ -993,7 +994,7 @@ app.post('/sms', async (req, res) => {
   }
 });
 
-// Campaign-aware inbound for the Glenalbyn open-house campaign.
+// Campaign-aware inbound for the Angus open-house campaign.
 // Behavior:
 // 1. STOP/UNSUBSCRIBE/CANCEL/END/QUIT  -> log inbound, mark users.opt_out=true,
 //    do NOT send any auto-reply (Twilio handles the STOP confirmation itself).
@@ -1001,8 +1002,20 @@ app.post('/sms', async (req, res) => {
 //    send the open-house details and direct Josh contact.
 // We deliberately do NOT call upsertRunnerApplicant for this campaign window.
 const STOP_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'opt out', 'optout']);
-const CAMPAIGN_ACK_REPLY = "It’s 3761 Glenalbyn Dr in Mount Washington. Open Sat + Sun 1–4PM. Details/flyer: https://3761glenalbyn.textmarco.com/ — Josh is at 310-295-1136 if you want to connect directly.";
-const CAMPAIGN_TAG = 'campaign:3761-glenalbyn-open-house-2026-05';
+const CAMPAIGN_ACK_REPLY = "2961 Angus St, Silver Lake. Open House Sat Nov 21 & Sun Nov 22, 1-5 PM both days. Photos and details: https://redf.in/FcMoak — Josh Gibson, West Shores Realty. Reply STOP to opt out.";
+const CAMPAIGN_TAG = 'campaign:2961-angus-open-house-2026-11';
+
+// Reply only to people who received this campaign. Old campaigns and runner
+// conversations must not trigger a new open-house message. Fail closed.
+async function hasCurrentCampaignOutbound(phone) {
+  if (!supabase || !phone) return false;
+  const user = await supabase.from('users').select('last_category').eq('phone', phone).maybeSingle();
+  if (user.error || user.data?.last_category === 'opted_out') return false;
+  const result = await supabase.from('messages').select('id')
+    .eq('user_phone', phone).eq('direction', 'outbound')
+    .eq('raw_payload->>campaign', CAMPAIGN_TAG).limit(1);
+  return !result.error && Array.isArray(result.data) && result.data.length > 0;
+} 
 
 app.post('/sms-twilio', async (req, res) => {
   const phone = normalizePhone(req.body.From);
@@ -1044,7 +1057,10 @@ app.post('/sms-twilio', async (req, res) => {
       return res.type('text/xml').send('<Response></Response>');
     }
 
-    // Non-STOP reply: mark as engaged on the Glenalbyn campaign and ack.
+    // Only acknowledge recipients of the current campaign.
+    if (!(await hasCurrentCampaignOutbound(phone))) return;
+
+    // Non-STOP reply: mark as engaged on the Angus campaign and ack.
     try {
       await markCampaignInterested(phone);
     } catch (engErr) {
