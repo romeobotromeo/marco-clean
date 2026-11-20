@@ -3,6 +3,8 @@ const BUCKET = 'angus-click-tracking';
 const CAMPAIGN = 'angus-open-house-2026-11';
 const DESTINATION = 'https://www.redfin.com/CA/Los-Angeles/2961-Angus-St-90039/home/7063996';
 const BASE = 'https://marco-clean.onrender.com';
+const BRANDED_BASE = 'https://go.jwgre.com';
+const VALID_TOKEN = /^(?:[a-f0-9]{32}|[a-f0-9]{10})$/;
 const MODES = new Set(['live', 'test', 'qa']);
 function classifyRequest(ua, headers = {}) {
   const purpose = `${headers.purpose || ''} ${headers['sec-purpose'] || ''}`;
@@ -46,21 +48,21 @@ function installCampaignClickTracking(app, { supabase, requireAdmin, secret }) {
   }
   app.post('/admin/campaigns/angus/links', async (req, res) => {
     if (!requireAdmin(req, res)) return;
-    const { to, mode } = req.body || {};
-    if (!/^\+1\d{10}$/.test(to || '') || !MODES.has(mode)) return res.status(400).json({ error: 'Valid recipient and explicit live/test/qa mode required' });
+    const { to, mode, branded = false } = req.body || {};
+    if (!/^\+1\d{10}$/.test(to || '') || !MODES.has(mode) || typeof branded !== 'boolean') return res.status(400).json({ error: 'Valid recipient and explicit live/test/qa mode required' });
     try {
       const recipientKey = crypto.createHash('sha256').update(`${CAMPAIGN}:${to}`).digest('hex');
-      const token = crypto.createHmac('sha256', secret).update(`${CAMPAIGN}:${mode}:${to}`).digest('hex').slice(0, 32);
+      const token = crypto.createHmac('sha256', secret).update(`${CAMPAIGN}:${mode}:${to}`).digest('hex').slice(0, branded ? 10 : 32);
       const link = { campaign: CAMPAIGN, mode, recipientKey, createdAt: new Date().toISOString() };
       const r = await storage().upload(`links/${token}.json`, Buffer.from(JSON.stringify(link)), { contentType: 'application/json', upsert: false });
       if (r.error && !['409', '400'].includes(String(r.error.statusCode))) throw Error('Link registration failed');
       if (r.error) { const existing = await readLink(token); if (!existing || existing.recipientKey !== recipientKey || existing.mode !== mode) throw Error('Link registration conflict'); }
-      res.json({ campaign: CAMPAIGN, mode, token, url: `${BASE}/a/${token}` });
+      res.json({ campaign: CAMPAIGN, mode, token, url: branded ? `${BRANDED_BASE}/angus/${token}` : `${BASE}/a/${token}` });
     } catch { res.status(503).json({ error: 'Link registration unavailable' }); }
   });
   app.post('/admin/campaigns/angus/links/:token/sent', async (req, res) => {
     if (!requireAdmin(req, res)) return;
-    if (!/^[a-f0-9]{32}$/.test(req.params.token) || !/^[MS]M[a-f0-9]{32}$/.test(req.body?.messageSid || '')) return res.status(400).json({ error: 'Valid token and Twilio message SID required' });
+    if (!VALID_TOKEN.test(req.params.token) || !/^[MS]M[a-f0-9]{32}$/.test(req.body?.messageSid || '')) return res.status(400).json({ error: 'Valid token and Twilio message SID required' });
     try {
       const link = await readLink(req.params.token);
       if (!link || !MODES.has(link.mode)) return res.status(404).json({ error: 'Unknown link' });
@@ -69,9 +71,9 @@ function installCampaignClickTracking(app, { supabase, requireAdmin, secret }) {
       res.json({ success: true });
     } catch { res.status(503).json({ error: 'Send registration unavailable' }); }
   });
-  app.get('/a/:token', async (req, res) => {
+  const redirectToListing = async (req, res) => {
     res.set('Cache-Control', 'no-store, private'); res.set('Referrer-Policy', 'no-referrer');
-    if (!/^[a-f0-9]{32}$/.test(req.params.token)) return res.status(404).send('Link not found');
+    if (!VALID_TOKEN.test(req.params.token)) return res.status(404).send('Link not found');
     try {
       const link = await readLink(req.params.token);
       if (!link || link.campaign !== CAMPAIGN || !MODES.has(link.mode)) return res.status(404).send('Link not found');
@@ -84,7 +86,9 @@ function installCampaignClickTracking(app, { supabase, requireAdmin, secret }) {
       }
       return res.redirect(302, DESTINATION);
     } catch { return res.status(503).send('This listing link is temporarily unavailable. Please try again shortly.'); }
-  });
+  };
+  app.get('/a/:token', redirectToListing);
+  app.get('/angus/:token', redirectToListing);
   app.get('/admin/campaigns/angus/clicks', async (req, res) => {
     if (!requireAdmin(req, res)) return;
     const mode = req.query.mode || 'live';

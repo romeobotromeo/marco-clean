@@ -23,3 +23,19 @@ test('authorized registration, repeat links, real redirects, HEAD exclusion, iso
  r=await f.call('GET /a/:token',{params:{token:'not-a-token'}});assert.equal(r.statusCode,404);
  f.fail();r=await f.call('GET /admin/campaigns/angus/clicks');assert.equal(r.statusCode,503);
 });
+
+test('branded links are short, preserve legacy links and share recipient counts',async()=>{
+ const f=fixture();const body={to:'+15555550124',mode:'qa'};
+ const legacy=await f.call('POST /admin/campaigns/angus/links',{body});
+ const branded=await f.call('POST /admin/campaigns/angus/links',{body:{...body,branded:true}});
+ assert.match(branded.body.url,/^https:\/\/go\.jwgre\.com\/angus\/[a-f0-9]{10}$/);
+ for(const [route,token] of [['GET /a/:token',legacy.body.token],['GET /angus/:token',branded.body.token]]){
+  const r=await f.call(route,{params:{token},headers:{'user-agent':'Mozilla/5.0 Safari/1'}});assert.equal(r.statusCode,302);
+  const sent=await f.call('POST /admin/campaigns/angus/links/:token/sent',{params:{token},body:{messageSid:'MM'+'1'.repeat(32)}});assert.equal(sent.statusCode,200);
+ }
+ const report=await f.call('GET /admin/campaigns/angus/clicks',{query:{mode:'qa'}});
+ assert.equal(report.body.recipientsSentTrackedLinks,1);assert.equal(report.body.uniqueRecipientsWithBrowserClicks,1);assert.equal(report.body.browserClickRequests,2);
+ // A short-code collision must fail closed, never redirect to a different recipient's record.
+ f.objects.set('links/'+branded.body.token+'.json',JSON.stringify({recipientKey:'someone-else',mode:'qa'}));
+ const collision=await f.call('POST /admin/campaigns/angus/links',{body:{...body,branded:true}});assert.equal(collision.statusCode,503);
+});
