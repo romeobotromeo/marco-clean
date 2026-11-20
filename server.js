@@ -1207,6 +1207,10 @@ app.post('/admin/reset/:phone', async (req, res) => {
   res.json({ success: true, phone, cleared: !!clear_history, reset_message_sent: !!clear_history });
 });
 
+require('./campaign-click-tracking').installCampaignClickTracking(app, {
+  supabase, requireAdmin, secret: ADMIN_API_TOKEN,
+});
+
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
