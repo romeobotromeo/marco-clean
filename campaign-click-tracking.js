@@ -48,7 +48,7 @@ function installCampaignClickTracking(app, { supabase, requireAdmin, secret }) {
   }
   app.post('/admin/campaigns/angus/links', async (req, res) => {
     if (!requireAdmin(req, res)) return;
-    const { to, mode, branded = false } = req.body || {};
+    const { to, mode, branded = true } = req.body || {};
     if (!/^\+1\d{10}$/.test(to || '') || !MODES.has(mode) || typeof branded !== 'boolean') return res.status(400).json({ error: 'Valid recipient and explicit live/test/qa mode required' });
     try {
       const recipientKey = crypto.createHash('sha256').update(`${CAMPAIGN}:${to}`).digest('hex');

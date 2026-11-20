@@ -26,7 +26,7 @@ test('authorized registration, repeat links, real redirects, HEAD exclusion, iso
 
 test('branded links are short, preserve legacy links and share recipient counts',async()=>{
  const f=fixture();const body={to:'+15555550124',mode:'qa'};
- const legacy=await f.call('POST /admin/campaigns/angus/links',{body});
+ const legacy=await f.call('POST /admin/campaigns/angus/links',{body:{...body,branded:false}});
  const branded=await f.call('POST /admin/campaigns/angus/links',{body:{...body,branded:true}});
  assert.match(branded.body.url,/^https:\/\/go\.jwgre\.com\/angus\/[a-f0-9]{10}$/);
  for(const [route,token] of [['GET /a/:token',legacy.body.token],['GET /angus/:token',branded.body.token]]){
