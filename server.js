@@ -1084,7 +1084,7 @@ app.post('/sms-twilio', async (req, res) => {
   } catch (error) {
     console.error('[SMS] Error processing Twilio message:', error.message || error);
   } finally {
-    res.type('text/xml').send('<Response></Response>');
+    if (!res.headersSent) res.type('text/xml').send('<Response></Response>');
   }
 });
 
