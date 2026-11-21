@@ -67,19 +67,35 @@ class Engine{
    convo.replyTimes=times;convo.updatedAt=new Date(this.clock()).toISOString();await this.store.write(key,convo);await this.store.write('processed/'+sid,{action:reply.action,knowledgeVersion:PROPERTY.version,at:convo.updatedAt});
   }catch{await this.hold('Inbound conversation requires review');}
  }
+ async records(prefix){
+  this.recordCaches=this.recordCaches||{};const cache=this.recordCaches[prefix]||(this.recordCaches[prefix]=new Map());
+  const names=await this.store.list(prefix);const missing=names.filter(n=>!cache.has(n));
+  for(let i=0;i<missing.length;i+=12)await Promise.all(missing.slice(i,i+12).map(async n=>{const value=await this.store.read(prefix+'/'+n);if(value)cache.set(n,value);}));
+  const rows=names.map(n=>cache.get(n)).filter(Boolean);
+  // Delivery events and accepted results are immutable; uncertain/rejected results can be reconciled.
+  if(prefix==='results')for(const [n,v] of cache)if(v.state!=='accepted')cache.delete(n);
+  return rows;
+ }
+ async pollIncoming(){
+  if(this.incomingBusy||this.nextIncomingPoll>this.clock())return;this.incomingBusy=true;this.nextIncomingPoll=this.clock()+3000;
+  try{const c=await this.config();if(c.repliesPaused||c.replyMode==='off'||(await this.holds()).length)return;
+   for(const sid of await this.store.list('incoming')){if(this.incomingSeen.has(sid))continue;await this.processIncoming(sid);if(await this.store.read('processed/'+sid))this.incomingSeen.add(sid);}
+  }catch(e){this.lastError=e.message;}finally{this.incomingBusy=false;}
+ }
  async monitor(){
   if(this.lastMonitor&&this.clock()-this.lastMonitor<30000)return;this.lastMonitor=this.clock();
-  const names=await this.store.list('results');const rows=[];for(let i=0;i<names.length;i+=12){rows.push(...await Promise.all(names.slice(i,i+12).map(n=>this.store.read('results/'+n))));}
+  const rows=await this.records('results');
   const recent=rows.filter(x=>x?.kind==='bulk'&&x.state==='accepted').sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)).slice(0,100);if(!recent.length)return;
-  const namesOfEvents=await this.store.list('delivery');const events=[];for(let i=0;i<namesOfEvents.length;i+=12)events.push(...await Promise.all(namesOfEvents.slice(i,i+12).map(n=>this.store.read('delivery/'+n))));
-  let failed=0,stale=0,optedOut=0;for(const row of recent){const status=deliveryStatus(events.filter(e=>e?.id===row.id),row.deliveryStatus);if(['failed','undelivered','canceled'].includes(status))failed++;if(['accepted','queued','sending'].includes(status)&&this.clock()-Date.parse(row.at)>120000)stale++;if(await this.contacts.suppressed(row.to))optedOut++;}
+  const events=await this.records('delivery');const byId=new Map();for(const event of events){if(!byId.has(event.id))byId.set(event.id,[]);byId.get(event.id).push(event);}
+  let failed=0,stale=0,optedOut=0;
+  for(let i=0;i<recent.length;i+=10)await Promise.all(recent.slice(i,i+10).map(async row=>{const status=deliveryStatus(byId.get(row.id)||[],row.deliveryStatus);if(['failed','undelivered','canceled'].includes(status))failed++;if(['accepted','queued','sending'].includes(status)&&this.clock()-Date.parse(row.at)>120000)stale++;if(await this.contacts.suppressed(row.to))optedOut++;}));
   if(failed>=Math.max(5,Math.ceil(recent.length*.1)))await this.hold('Delivery failures reached review threshold');
   else if(optedOut>=Math.max(3,Math.ceil(recent.length*.05)))await this.hold('Opt-outs reached review threshold');
   else if(stale>=20)await this.hold('Provider backlog or missing delivery callbacks requires review');
  }
  async tick(){if(this.busy||this.nextPoll>this.clock())return;this.busy=true;this.heartbeat=new Date(this.clock()).toISOString();try{
   const c=await this.config();this.nextPoll=this.clock()+(c.paused?5000:500);if((await this.holds()).length)return;
-  if(c.replyMode!=='off'&&!c.repliesPaused){for(const sid of await this.store.list('incoming')){if(this.incomingSeen.has(sid))continue;await this.processIncoming(sid);if(await this.store.read('processed/'+sid))this.incomingSeen.add(sid);}}
+  if(c.replyMode!=='off'&&!c.repliesPaused)this.pollIncoming();
   if(c.paused||!c.bulk)return;
   await this.monitor();if((await this.holds()).length)return;
   if(!this.manifest||this.manifestVersion!==c.contentVersion){this.manifest=await this.store.read('manifest');this.manifestVersion=c.contentVersion;}
