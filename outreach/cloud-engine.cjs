@@ -98,7 +98,7 @@ class Engine{
   if(c.replyMode!=='off'&&!c.repliesPaused)this.pollIncoming();
   if(c.paused||!c.bulk)return;
   await this.monitor();if((await this.holds()).length)return;
-  if(!this.manifest||this.manifestVersion!==c.contentVersion){this.manifest=await this.store.read('manifest');this.manifestVersion=c.contentVersion;}
+  if(!this.manifest||this.manifestVersion!==c.contentVersion){this.manifest=await this.store.read('manifest');this.manifestVersion=c.contentVersion;for(const result of await this.records('results'))if(['accepted','rejected','suppressed','skipped_prior_campaign'].includes(result.state))this.seen.add(result.id);}
   for(const job of this.manifest?.jobs||[]){if(this.inflight>=4)break;if(job.state!=='not_sent'||this.seen.has(job.id))continue;this.seen.add(job.id);this.inflight++;this.send({...job,kind:'bulk'}).then(outcome=>{if(outcome==='rate_limited')this.seen.delete(job.id);}).catch(e=>{this.lastError=e.message;this.seen.delete(job.id);}).finally(()=>this.inflight--);}
  }catch(e){this.lastError=e.message;}finally{this.busy=false;}}
  start(){this.timer=setInterval(()=>this.tick(),500);this.timer.unref();this.tick();}
