@@ -917,6 +917,7 @@ async function handleInboundMessage({ channel, phone, textBody, mediaUrl, provid
     }
 
     if (!(await hasCurrentCampaignOutbound(phone))) return { reply: null, providerNumber };
+    if (!(await claimCampaignAcknowledgment(phone))) return { reply: null, providerNumber };
     await markCampaignInterested(phone);
     await logMessage(phone, 'outbound', CAMPAIGN_ACK_REPLY, null, {
       provider: 'twilio',
@@ -1004,6 +1005,9 @@ app.post('/sms', async (req, res) => {
 const STOP_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'opt out', 'optout']);
 const CAMPAIGN_ACK_REPLY = "See you this weekend.";
 const CAMPAIGN_TAG = 'campaign:2961-angus-open-house-2026-11';
+const claimCampaignAcknowledgment = require('./campaign-ack-gate').createCampaignAckGate({
+  supabase, campaign: CAMPAIGN_TAG, reply: CAMPAIGN_ACK_REPLY,
+});
 
 // Reply only to people who received this campaign. Old campaigns and runner
 // conversations must not trigger a new open-house message. Fail closed.
@@ -1059,6 +1063,7 @@ app.post('/sms-twilio', async (req, res) => {
 
     // Only acknowledge recipients of the current campaign.
     if (!(await hasCurrentCampaignOutbound(phone))) return;
+    if (!(await claimCampaignAcknowledgment(phone))) return;
 
     // Non-STOP reply: mark as engaged on the Angus campaign and ack.
     try {
