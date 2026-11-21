@@ -64,6 +64,9 @@ const supabase = supabaseUrl && supabaseKey
   ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } })
   : null;
 
+// MARCO Outreach stays closed until explicit owner test/bulk approvals.
+const outreach = require('./outreach/cloud-app.cjs').installOutreach(app, { supabase, anthropic });
+
 const ROUTE_RATE_LIMIT = rateLimit({
   windowMs: 60 * 1000,
   max: 20,

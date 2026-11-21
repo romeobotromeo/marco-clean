@@ -1,0 +1,3 @@
+# Angus dashboard design
+
+Operate mode. Inherits Marco Runner ink/navy/light-neutral palette and sans typography. Chosen structure: campaign hold notice above a two-column ledger, progress/delivery left and recent conversation stream right; mobile stacks these. Candidate structures considered: metrics-first, inbox-first, timeline, delivery funnel, split activity log, checklist, ledger plus inbox (selected). No campaign switcher in v01. Large status and separate timestamped sources communicate approval and freshness. No sending controls in this first read-only release. Native details/summary expose message text without modals, preserving open state across polling. Visual browser verification is outstanding because browser host unavailable.
