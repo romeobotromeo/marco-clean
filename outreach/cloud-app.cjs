@@ -7,7 +7,7 @@ function equal(a,b){return typeof b==='string'&&a.length===b.length&&crypto.timi
 async function parallelMap(values,fn){const out=[];let index=0;await Promise.all(Array.from({length:Math.min(8,values.length)},async()=>{for(;;){const i=index++;if(i>=values.length)return;out[i]=await fn(values[i]);}}));return out;}
 function installOutreach(app,{supabase,openai}){
  if(!supabase)return null;
- const store=new Storage(supabase),secret=process.env.ADMIN_API_TOKEN||'';
+ const store=new Storage(supabase),secret=(process.env.ADMIN_API_TOKEN||'').trim();
  const dashboardToken=crypto.createHmac('sha256',secret).update('MARCO Outreach dashboard v01').digest('hex');
  const admin=(req,res)=>{if(secret&&equal(secret,(req.get('Authorization')||'').replace(/^Bearer /,'')))return true;res.status(401).json({error:'Unauthorized'});return false;};
  const viewer=(req,res)=>{if(secret&&(equal(dashboardToken,req.get('X-Marco-Token')||'')||equal(secret,(req.get('Authorization')||'').replace(/^Bearer /,''))))return true;res.status(401).json({error:'Unauthorized'});return false;};

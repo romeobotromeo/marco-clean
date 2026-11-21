@@ -24,7 +24,7 @@ STOP/wrong-number requests suppress before model calls. Per-conversation reply l
 
 ## Current external prerequisite
 
-Nov20: owner requested migration to GPT. Both Outreach and the older home-ops assistant now use OpenAI Responses, default `gpt-5.4-mini` (override `OPENAI_MODEL`). `OPENAI_API_KEY` is private server configuration. No Anthropic fallback. Replies use strict JSON structure with local fact/contact validation; incomplete responses, refusals and API failures are rejected. Live local GPT previews passed identity, open-house/price, unknown-roof handoff and STOP cases. Cloud credential configuration requires owner approval after automatic review blocked the update. Owner authorized one SMS test to the business number; it has not been sent. Bulk remains unapproved.
+Nov20: owner requested migration to GPT. Both Outreach and the older home-ops assistant now use OpenAI Responses, default `gpt-5.4-mini` (override `OPENAI_MODEL`). `OPENAI_API_KEY` is private server configuration. No Anthropic fallback. Replies use strict JSON structure with local fact/contact validation; incomplete responses, refusals and API failures are rejected. Live local GPT previews passed identity, open-house/price, unknown-roof handoff and STOP cases. Owner approved storing the OpenAI key on Render. The authorized API update still returns HTTP403 forbidden; dashboard browser access is unavailable. Commit a062db8 is verified live. BLOCKED-ON-JOSH: add OPENAI_API_KEY in Render environment settings and save/redeploy. Owner authorized one SMS test to the business number; it has not been sent. Bulk remains unapproved.
 
 ## Known first-release limits
 
