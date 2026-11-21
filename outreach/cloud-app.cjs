@@ -1,6 +1,6 @@
 const crypto=require('node:crypto');const path=require('node:path');
 const {Storage}=require('./storage.cjs');const {Engine,CAMPAIGN,hash,canReply,deliveryStatus}=require('./cloud-engine.cjs');
-const {BUSINESS_PHONE,contentVersion}=require('./approval-gate.cjs');const {PROPERTY,generateReply,privacy}=require('./personality.cjs');
+const {BUSINESS_PHONE,contentVersion}=require('./approval-gate.cjs');const {PROPERTY,generateReply,privacy,stopIntent}=require('./personality.cjs');
 const BASE='https://marco-clean.onrender.com';
 function signatureOK(req,secret){if(!secret)return false;let data=BASE+req.originalUrl;for(const key of Object.keys(req.body||{}).sort())data+=key+String(req.body[key]);const expected=crypto.createHmac('sha1',secret).update(data).digest('base64');return equal(expected,req.get('X-Twilio-Signature')||'');}
 function equal(a,b){return typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));}
@@ -30,7 +30,8 @@ function installOutreach(app,{supabase,openai}){
  const engine=new Engine({store,provider,contacts,openai,tracking});engine.start();
  async function wrap(res,fn){try{await fn();}catch(e){res.status(503).json({error:e.message});}}
  app.use(['/sms-twilio','/sms'],async(req,res,next)=>{
-  if(req.method!=='POST')return next();let c;try{c=await engine.config();}catch{return next();}
+  if(req.method!=='POST')return next();let c;try{c=await engine.config();}catch{return res.sendStatus(503);}
+  if(c.paused&&c.repliesPaused){if(!signatureOK(req,process.env.TWILIO_AUTH_TOKEN))return res.sendStatus(403);try{const to=String(req.body.From||''),body=String(req.body.Body||'');if(stopIntent(body))await contacts.suppress(to);await contacts.logInbound({to,body,sid:req.body.MessageSid});return res.type('text/xml').send('<Response/>');}catch{return res.sendStatus(503);}}
   const to=String(req.body.From||'');if(!canReply(c,to))return next();
   if(!signatureOK(req,process.env.TWILIO_AUTH_TOKEN))return res.sendStatus(403);
   try{if(to!==BUSINESS_PHONE&&!await contacts.prior(to))return res.type('text/xml').send('<Response/>');await engine.receive({sid:req.body.MessageSid,to,body:String(req.body.Body||'')});return res.type('text/xml').send('<Response/>');}catch{return res.sendStatus(503);}

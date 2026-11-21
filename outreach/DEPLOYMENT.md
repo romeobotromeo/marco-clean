@@ -29,3 +29,9 @@ Nov20: owner requested migration to GPT. Both Outreach and the older home-ops as
 ## Known first-release limits
 
 Private read-only dashboard; manual replies/release controls and full history UI remain later work. Professional-role web enrichment is specified but not enabled. Call bridging and multi-campaign views remain next phases. Two overlapping deployments deduplicate each message with permanent claims; in-flight model work is conservatively held if its processing claim becomes orphaned. Storage claims with no result require manual reconciliation and are surfaced, never auto-retried. The queue has no automatic uncertain-send recovery or self-changing behavior.
+
+## Live GPT test status
+
+Nov20 9:39PM Pacific: GPT live preview passed. Owner-approved single photo test sent to310-295-1136; Twilio MMd0c9938f4654c68f894995d89eb63f4d status sent (not confirmed delivered). Initial MMS-prefix validation caused uncertain result; matched Twilio GET and reconciled result, message log and tracking without resend; related hold cleared. Fix13d915b pushed. One-hour business-number-only conversational test enabled; no bulk grant, no test review. Next owner conversational test and separate approval before bulk.
+
+Nov20 owner explicitly authorized personal number ending1451 for a test only, superseding the earlier test-destination restriction. One MMS MM831c5b11eb77bbb1580e084c3ac91714 accepted/logged. Owner reported canned reply: alternate number had not been included in GPT test route. Fix769577f routes only explicitly selected test.to through GPT; business default preserved. Cloud test.to now1451 for one hour; bulk grant remains absent. Intro changed to Josh’s assistant, with truthful AI disclosure if directly asked. Public contact remains310-295-1136; never include personal number in public copy.
