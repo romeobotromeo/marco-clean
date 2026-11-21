@@ -4,7 +4,7 @@ const {generateReply,stopIntent,PROPERTY,privacy}=require('./personality.cjs');
 const CAMPAIGN='campaign:2961-angus-open-house-2026-11';
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 function approved(c,kind,to,now=Date.now()){assertApproved(c,{kind,campaign:CAMPAIGN,version:c.contentVersion,to,now});}
-function canReply(c,to,now=Date.now()){try{if(!c||c.repliesPaused||c.replyMode==='off')return false;if(c.replyMode==='test'){approved(c,'test',to,now);return to===BUSINESS_PHONE;}if(c.replyMode==='live'){approved({...c,paused:false},'bulk',to,now);return true;}return false;}catch{return false;}}
+function canReply(c,to,now=Date.now()){try{if(!c||c.repliesPaused||c.replyMode==='off')return false;if(c.replyMode==='test'){approved(c,'test',to,now);return to===(c.test?.to||BUSINESS_PHONE);}if(c.replyMode==='live'){approved({...c,paused:false},'bulk',to,now);return true;}return false;}catch{return false;}}
 function deliveryStatus(events,fallback='accepted'){const statuses=new Set(events.map(x=>x.status));for(const s of ['read','delivered','undelivered','failed','canceled','sent','sending','queued','accepted'])if(statuses.has(s))return s;return fallback;}
 class Engine{
  constructor({store,provider,contacts,openai,tracking,clock=()=>Date.now()}){Object.assign(this,{store,provider,contacts,openai,tracking,clock});this.inflight=0;this.busy=false;this.heartbeat=null;this.lastError=null;this.manifest=null;this.seen=new Set();this.incomingSeen=new Set();}

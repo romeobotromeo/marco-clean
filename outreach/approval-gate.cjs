@@ -12,7 +12,7 @@ function assertApproved(record, {kind, campaign, version, to, now=Date.now()}) {
   if (!approval || approval.confirmedBy !== 'Josh' || !approval.evidence || !approval.confirmedAt) throw Error('Josh must explicitly confirm '+kind+' sending');
   const confirmed=Date.parse(approval.confirmedAt), expires=Date.parse(approval.expiresAt);
   if (!Number.isFinite(confirmed) || !Number.isFinite(expires) || confirmed>now || expires<=now) throw Error('Send approval missing or expired');
-  if (kind==='test' && to!==BUSINESS_PHONE) throw Error('Test destination must be the approved business line');
+  if (kind==='test' && to!==(record.test?.to||BUSINESS_PHONE)) throw Error('Test destination must be the approved business line');
   if (kind==='bulk') {
     const review=record.testReview;
     if (!review || review.reviewedBy!=='Josh' || review.result!=='passed' || review.contentVersion!==version || !review.evidence) throw Error('Josh must review and pass the conversational test first');
