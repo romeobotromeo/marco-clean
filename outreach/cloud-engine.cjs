@@ -34,7 +34,7 @@ class Engine{
   }catch(e){await this.hold('Claimed message requires review; never automatically retry.');throw e;}
  }
  async receive(event){const c=await this.config();if(!canReply(c,event.to,this.clock()))return false;
-  if(!/^SM[a-f0-9]{32}$/i.test(event.sid))throw Error('Invalid inbound SID');
+  if(!/^(?:SM|MM)[a-f0-9]{32}$/i.test(event.sid))throw Error('Invalid inbound SID');
   await this.store.create('incoming/'+event.sid,{...event,at:new Date(this.clock()).toISOString()});
   if(stopIntent(event.body)){await this.contacts.suppress(event.to);await this.store.write('conversations/'+hash(event.to),{held:true,reason:'opted_out'});}
   return true;
