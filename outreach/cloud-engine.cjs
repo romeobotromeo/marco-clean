@@ -7,7 +7,7 @@ function approved(c,kind,to,now=Date.now()){assertApproved(c,{kind,campaign:CAMP
 function canReply(c,to,now=Date.now()){try{if(!c||c.repliesPaused||c.replyMode==='off')return false;if(c.replyMode==='test'){approved(c,'test',to,now);return to===BUSINESS_PHONE;}if(c.replyMode==='live'){approved({...c,paused:false},'bulk',to,now);return true;}return false;}catch{return false;}}
 function deliveryStatus(events,fallback='accepted'){const statuses=new Set(events.map(x=>x.status));for(const s of ['read','delivered','undelivered','failed','canceled','sent','sending','queued','accepted'])if(statuses.has(s))return s;return fallback;}
 class Engine{
- constructor({store,provider,contacts,anthropic,tracking,clock=()=>Date.now()}){Object.assign(this,{store,provider,contacts,anthropic,tracking,clock});this.inflight=0;this.busy=false;this.heartbeat=null;this.lastError=null;this.manifest=null;this.seen=new Set();this.incomingSeen=new Set();}
+ constructor({store,provider,contacts,openai,tracking,clock=()=>Date.now()}){Object.assign(this,{store,provider,contacts,openai,tracking,clock});this.inflight=0;this.busy=false;this.heartbeat=null;this.lastError=null;this.manifest=null;this.seen=new Set();this.incomingSeen=new Set();}
  async config(){const c=await this.store.read('config');if(!c)throw Error('Outreach configuration not initialized');return c;}
  async hold(reason){const at=new Date(this.clock()).toISOString();await this.store.create('holds/'+this.clock()+'-'+crypto.randomUUID(),{reason,at});this.lastError=reason;}
  async holds(){const names=await this.store.list('holds');const clears=new Set(await this.store.list('cleared-holds'));return names.filter(n=>!clears.has(n));}
@@ -51,7 +51,7 @@ class Engine{
    if(convo.takeover||convo.held){await this.store.write('processed/'+sid,{action:'human_takeover'});return;}
    const times=(convo.replyTimes||[]).filter(t=>t>this.clock()-86400000);
    if(times.length>=20||times.filter(t=>t>this.clock()-600000).length>=6||(convo.history||[]).filter(m=>m.direction==='inbound'&&m.body===event.body).length>=2){await this.store.write(key,{...convo,held:true,reason:'reply_limit_or_loop'});await this.store.write('processed/'+sid,{action:'hold'});return;}
-   let reply;try{reply=await generateReply({anthropic:this.anthropic,body:event.body,history:convo.history,now:new Date(this.clock())});}catch{reply={action:'handoff',text:'I’ll need Josh to help with that. You can reach him at 310-295-1136.',factIds:['identity']};}
+   let reply;try{reply=await generateReply({openai:this.openai,body:event.body,history:convo.history,now:new Date(this.clock())});}catch{reply={action:'handoff',text:'I’ll need Josh to help with that. You can reach him at 310-295-1136.',factIds:['identity']};}
    convo.history=[...(convo.history||[]),{direction:'inbound',body:event.body,at:event.at}].slice(-30);
    if(reply.action==='opt_out'){await this.contacts.suppress(event.to);convo.held=true;convo.reason='opted_out';}
    else if(reply.action!=='no_reply'&&reply.text){

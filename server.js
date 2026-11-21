@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
-const Anthropic = require('@anthropic-ai/sdk');
+const { createOpenAI } = require('./outreach/openai.cjs');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 let telegram = null;
@@ -45,7 +45,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const openai = createOpenAI();
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
 const DEFAULT_GREETING = "Thanks for texting Marco. We just launched and are in beta, so response times may vary, but we're on it. Hours are Mon-Fri 7a-6p. Text URGENT for after-hours support. Send the property address, what's going on, how soon you need help, and any photos.";
 const DEFAULT_RESET_MESSAGE = process.env.DEFAULT_RESET_MESSAGE || DEFAULT_GREETING;
@@ -65,7 +65,7 @@ const supabase = supabaseUrl && supabaseKey
   : null;
 
 // MARCO Outreach stays closed until explicit owner test/bulk approvals.
-const outreach = require('./outreach/cloud-app.cjs').installOutreach(app, { supabase, anthropic });
+const outreach = require('./outreach/cloud-app.cjs').installOutreach(app, { supabase, openai });
 
 const ROUTE_RATE_LIMIT = rateLimit({
   windowMs: 60 * 1000,
@@ -723,7 +723,7 @@ This is the first inbound message from this phone number. Set reply EXACTLY to "
   return basePrompt;
 }
 
-function buildAnthropicMessages(history) {
+function buildAgentMessages(history) {
   if (!Array.isArray(history) || history.length === 0) return [];
   return history.map((msg) => {
     const role = msg.direction === 'inbound' ? 'user' : 'assistant';
@@ -851,7 +851,7 @@ async function handleTelegramUpdate(update) {
 }
 
 async function runHomeOpsAgent({ history, isNewContact, channel }) {
-  if (!anthropic.apiKey) {
+  if (!openai.configured) {
     return {
       reply: isNewContact ? greetingForChannel(channel) : 'On it. Need the address and timing to move forward.',
       category: 'general',
@@ -863,18 +863,11 @@ async function runHomeOpsAgent({ history, isNewContact, channel }) {
     };
   }
 
-  const messages = buildAnthropicMessages(history);
+  const messages = buildAgentMessages(history);
   const system = buildSystemPrompt(isNewContact, channel);
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 380,
-      temperature: 0.2,
-      system,
-      messages: messages.length > 0 ? messages : [{ role: 'user', content: 'Hi Marco' }],
-    });
-    const aiText = response?.content?.[0]?.text;
+    const aiText = await openai.text({system,messages:messages.length ? messages : [{role:'user',content:'Hi Marco'}]});
     const parsed = parseAgentJson(aiText);
     if (parsed?.reply) {
       parsed.reply = parsed.reply.length > 160 ? `${parsed.reply.slice(0, 157)}...` : parsed.reply;
@@ -884,7 +877,7 @@ if (isNewContact) {
 }
     return parsed;
   } catch (error) {
-    console.error('[Marco AI] Anthropic failure:', error.message || error);
+    console.error('[Marco AI] OpenAI failure:', error.message || error);
     return {
       reply: isNewContact ? greetingForChannel(channel) : 'On it. Need the address and timing to keep this moving.',
       category: 'general',
@@ -1223,7 +1216,7 @@ app.get('/health', (req, res) => {
   res.json({
     ok: true,
     supabase: !!supabase,
-    anthropic: !!anthropic.apiKey,
+    openai: !!openai.configured,
     updated: 'home-ops concierge + runner recruiting',
     commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
     service: process.env.RENDER_SERVICE_NAME || null,

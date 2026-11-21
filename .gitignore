@@ -6,3 +6,6 @@ sites/
 .claude/
 *.swp
 node_modules/
+
+# Private OpenAI credentials
+.env.openai
